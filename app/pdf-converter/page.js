@@ -178,7 +178,7 @@ export default function PdfConverterPage() {
       <div className="flex flex-col gap-6">
         {/* Workspace */}
         {!file ? (
-          <div style={{ maxWidth: 680, margin: '0 auto' }}>
+          <div style={{ maxWidth: 680, margin: '0 auto', width: '100%' }}>
             <UploadBox 
               onFileSelect={handleFileSelect} 
               acceptedFormats={['.pdf']}

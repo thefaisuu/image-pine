@@ -155,7 +155,7 @@ export default function CollagePage() {
       seoText="Create photo collages online for free. Combine JPEG, PNG and WebP images into grid layouts and export as JPEG. Browser-based, no uploads, instant results."
     >
       {files.length === 0 ? (
-        <div style={{ maxWidth: 680, margin: '0 auto' }}>
+        <div style={{ maxWidth: 680, margin: '0 auto', width: '100%' }}>
           <UploadBox onFileSelect={handleFileSelect} acceptedFormats={['.jpg', '.jpeg', '.png', '.webp']} multiple={true} />
         </div>
       ) : (

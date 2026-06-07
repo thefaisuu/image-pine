@@ -301,7 +301,7 @@ export default function ResizeWebpPage() {
         {/* Conditional Workspace */}
         {files.length === 0 ? (
           /* Initial Upload Box View */
-          <div style={{ maxWidth: 680, margin: '0 auto' }}>
+          <div style={{ maxWidth: 680, margin: '0 auto', width: '100%' }}>
             <UploadBox 
               onFileSelect={handleFileSelect} 
               acceptedFormats={['.webp']}

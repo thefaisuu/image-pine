@@ -181,7 +181,7 @@ export default function JpgToPdfPage() {
         </div>
 
         {files.length === 0 ? (
-          <div style={{ maxWidth: 680, margin: '0 auto' }}>
+          <div style={{ maxWidth: 680, margin: '0 auto', width: '100%' }}>
             <UploadBox 
               onFileSelect={handleFileSelect} 
               acceptedFormats={['.jpg', '.jpeg']}
