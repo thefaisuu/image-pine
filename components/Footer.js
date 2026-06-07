@@ -47,7 +47,7 @@ export default function Footer() {
           </div>
 
           {/* Link Columns */}
-          {[columns.imageTools, columns.convert, columns.pdfTools, columns.about].map((col, i) => (
+          {[columns.imageTools, columns.studioTools, columns.convert, columns.pdfTools, columns.about].map((col, i) => (
             <div key={i}>
               <h4 style={{
                 fontSize: 10, fontWeight: 800, color: '#9898B5',

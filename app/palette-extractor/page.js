@@ -59,6 +59,14 @@ export default function PaletteExtractorPage() {
     }).join('').toUpperCase();
   };
 
+  const formatSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  };
+
   const handleFileSelect = (selectedList) => {
     if (selectedList.length > 0) {
       setFile(selectedList[0]);
@@ -182,14 +190,41 @@ export default function PaletteExtractorPage() {
   }, [file]);
 
   const copyToClipboard = (text, idx, format) => {
-    navigator.clipboard.writeText(text).then(() => {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        setCopiedIndex(idx);
+        setCopiedFormat(format);
+        setTimeout(() => {
+          setCopiedIndex(null);
+          setCopiedFormat('');
+        }, 1500);
+      }).catch(err => {
+        console.error(err);
+        fallbackCopyToClipboard(text, idx, format);
+      });
+    } else {
+      fallbackCopyToClipboard(text, idx, format);
+    }
+  };
+
+  const fallbackCopyToClipboard = (text, idx, format) => {
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
       setCopiedIndex(idx);
       setCopiedFormat(format);
       setTimeout(() => {
         setCopiedIndex(null);
         setCopiedFormat('');
       }, 1500);
-    });
+    } catch (err) {
+      console.error('Fallback copy failed: ', err);
+    }
   };
 
   const downloadPaletteCard = () => {
