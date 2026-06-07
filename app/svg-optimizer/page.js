@@ -10,7 +10,9 @@ const _FEATURES = [
   { icon: (<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round"><path d="M10 20l4-16m2 16l4-16M6 9h14M4 15h14"/></svg>), title: 'XML Minification', desc: 'Removes unnecessary metadata, namespaces, comments, and empty elements.' },
   { icon: (<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>), title: 'Precision Sliders', desc: 'Reduce coordinate decimal precision to compress paths up to 60%.' },
   { icon: (<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>), title: 'Interactive Previews', desc: 'See your vector artwork render side-by-side with live size calculations.' },
-  { icon: (<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>), title: '100% Client-Side', desc: 'Your SVGs are processed local-first. We never inspect your design codes.' }
+  { icon: (<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>), title: '100% Client-Side', desc: 'Your SVGs are processed local-first. We never inspect your design codes.' },
+  { icon: (<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>), title: 'Instant', desc: 'Compression completes locally in milliseconds.' },
+  { icon: (<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>), title: 'Quality Preserved', desc: 'Reduces size without altering visual curves and layouts.' }
 ];
 
 const _STEPS = [
@@ -32,6 +34,7 @@ export default function SvgOptimizerPage() {
   const [errorMsg, setErrorMsg] = useState('');
   
   const [fileDetails, setFileDetails] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState('');
 
   const handleFileSelect = (files) => {
     if (files.length === 0) return;
@@ -123,6 +126,18 @@ export default function SvgOptimizerPage() {
       // 3. Recursively optimize coordinates on all children
       optimizeElement(svgNode, precision);
 
+      // 4. Ensure viewBox is set if width and height are available but viewBox is not
+      const wAttr = svgNode.getAttribute('width');
+      const hAttr = svgNode.getAttribute('height');
+      const vbAttr = svgNode.getAttribute('viewBox');
+      if (!vbAttr && wAttr && hAttr) {
+        const wVal = parseFloat(wAttr);
+        const hVal = parseFloat(hAttr);
+        if (!isNaN(wVal) && !isNaN(hVal)) {
+          svgNode.setAttribute('viewBox', `0 0 ${wVal} ${hVal}`);
+        }
+      }
+
       // Serialize back to string
       const serializer = new XMLSerializer();
       let minified = serializer.serializeToString(doc);
@@ -141,6 +156,17 @@ export default function SvgOptimizerPage() {
   useEffect(() => {
     runOptimizer();
   }, [svgInput, precision]);
+
+  useEffect(() => {
+    if (optimizedSvg) {
+      const blob = new Blob([optimizedSvg], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      setPreviewUrl(url);
+      return () => URL.revokeObjectURL(url);
+    } else {
+      setPreviewUrl('');
+    }
+  }, [optimizedSvg]);
 
   const copyToClipboard = () => {
     if (!optimizedSvg) return;
@@ -285,10 +311,12 @@ export default function SvgOptimizerPage() {
                 </h4>
                 
                 <div style={{ border: "1.5px solid #E4E4EF", borderRadius: 14, padding: 16, minHeight: 320, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden", background: "repeating-conic-gradient(#F1F1F7 0% 25%, #fff 0% 50%) 0 0 / 16px 16px" }}>
-                  {optimizedSvg ? (
-                    <div 
-                      style={{ maxHeight: 320, maxWidth: "100%", display: "block" }}
-                      dangerouslySetInnerHTML={{ __html: optimizedSvg }}
+                  {previewUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={previewUrl}
+                      alt="SVG Preview"
+                      style={{ maxWidth: '100%', maxHeight: 280, width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
                     />
                   ) : (
                     <span className="text-xs text-gray-400">Waiting for code...</span>
