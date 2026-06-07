@@ -8,8 +8,10 @@
     "start": "next start",
     "lint": "next lint"
   },
+  "optionalDependencies": {
+    "@next/swc-win32-x64-msvc": "^16.2.7"
+  },
   "dependencies": {
-    "@next/swc-win32-x64-msvc": "^16.2.7",
     "file-saver": "^2.0.5",
     "heic2any": "^0.0.4",
     "jszip": "^3.10.1",
