@@ -285,7 +285,7 @@ export default function GifConverterPage() {
       <div className="flex flex-col gap-6">
         {/* Workspace */}
         {!file ? (
-          <div style={{ maxWidth: 680, margin: "0 auto", background: "#fff", border: "1px solid #E4E4EF", borderRadius: 20, padding: "48px 40px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)", minHeight: 260 }}>
+          <div style={{ maxWidth: 680, margin: '0 auto' }}>
             <UploadBox 
               onFileSelect={handleFileSelect} 
               acceptedFormats={['.gif']}
