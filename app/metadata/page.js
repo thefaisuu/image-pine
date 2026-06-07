@@ -317,6 +317,13 @@ export default function MetadataPage() {
       }
       
       const marker = view.getUint16(offset, false);
+
+      // Stop parsing at SOS (Start of Scan) marker. Copy the rest of the file.
+      if (marker === 0xFFDA) {
+        segments.push(new Uint8Array(arrayBuffer, offset, length - offset));
+        break;
+      }
+
       if (marker === 0xFFD9) {
         // EOI
         segments.push(new Uint8Array(arrayBuffer, offset, length - offset));
@@ -563,10 +570,9 @@ export default function MetadataPage() {
                 <div style={{ width: '100%', borderRadius: 10, overflow: 'hidden', border: '1px solid #E4E4EF' }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={URL.createObjectURL(file)}
+                    src={file.preview || URL.createObjectURL(file)}
                     alt=""
                     style={{ width: '100%', height: 'auto', maxHeight: 220, objectFit: 'contain', display: 'block', background: 'repeating-conic-gradient(#F1F1F7 0% 25%, #fff 0% 50%) 0 0 / 16px 16px' }}
-                    onLoad={(e) => URL.revokeObjectURL(e.target.src)}
                   />
                 </div>
               </div>
