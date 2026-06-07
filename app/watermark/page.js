@@ -1,0 +1,794 @@
+"use client";
+
+import React, { useState, useEffect, useRef } from 'react';
+import ToolPageShell from '@/components/ToolPageShell';
+import UploadBox from '@/components/UploadBox';
+import { saveAs } from 'file-saver';
+import { saveHistory } from '@/lib/storage';
+
+export default function WatermarkPage() {
+  const [files, setFiles] = useState([]);
+  const [selectedFile, setSelectedFile] = useState(null);
+  
+  // Watermark Settings
+  const [type, setType] = useState('text'); // 'text' | 'image'
+  
+  // Text Watermark settings
+  const [text, setText] = useState('Image Pine');
+  const [fontFamily, setFontFamily] = useState('sans-serif');
+  const [fontSize, setFontSize] = useState(36);
+  const [color, setColor] = useState('#ffffff');
+  const [opacity, setOpacity] = useState(0.5);
+  const [rotation, setRotation] = useState(0);
+  const [bold, setBold] = useState(false);
+  const [italic, setItalic] = useState(false);
+  const [tile, setTile] = useState(false);
+  
+  // Image Watermark settings
+  const [logoFile, setLogoFile] = useState(null);
+  const [logoPreview, setLogoPreview] = useState('');
+  const [logoScale, setLogoScale] = useState(15); // % of main image width
+  const [logoOpacity, setLogoOpacity] = useState(0.5);
+  const [logoRotation, setLogoRotation] = useState(0);
+  
+  // Position settings
+  const [position, setPosition] = useState('center'); // 'top-left' | 'top-right' | 'center' | 'bottom-left' | 'bottom-right' | 'custom'
+  const [customX, setCustomX] = useState(50); // % from left
+  const [customY, setCustomY] = useState(50); // % from top
+
+  const [saveFormat, setSaveFormat] = useState('Original');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processedCount, setProcessedCount] = useState(0);
+
+  const _FEATURES = [
+    {
+      icon: (
+        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        </svg>
+      ),
+      title: '100% Private',
+      desc: 'All watermarking and rendering process inside your web browser. No files are uploaded.'
+    },
+    {
+      icon: (
+        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
+          <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
+      ),
+      title: 'Bulk Processing & ZIPs',
+      desc: 'Watermark dozens of images simultaneously and download them all instantly packaged as a ZIP.'
+    },
+    {
+      icon: (
+        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <circle cx="8.5" cy="8.5" r="1.5" />
+          <path d="M20.4 14.5L16 10l-6 6-4-4-3 3" />
+        </svg>
+      ),
+      title: 'Logo or Text Overlays',
+      desc: 'Add text watermarks with custom fonts, colors, and repeating grid tiles, or overlay your brand logo.'
+    }
+  ];
+
+  const _STEPS = [
+    { n: '1', title: 'Upload Files', desc: 'Select one or more images you want to watermark.' },
+    { n: '2', title: 'Customize Overlay', desc: 'Design your text watermark or load a PNG logo, then adjust scale and positioning.' },
+    { n: '3', title: 'Export Bundle', desc: 'Download watermarked images individually or as a compressed ZIP file.' }
+  ];
+
+  const _FAQS = [
+    { q: 'How does bulk watermarking work?', a: 'You can upload multiple files at once. The watermark template you design is automatically applied to all images based on their individual dimensions, preserving relative sizing.' },
+    { q: 'What is a Tiled Watermark?', a: 'Tiling repeats your text watermark across the entire image in a grid pattern. This makes it extremely difficult for others to crop or remove the watermark, which is ideal for sending proofs to clients.' },
+    { q: 'Which formats are supported for the logo?', a: 'You can upload a PNG, JPEG, SVG, or WebP logo file. Transparent PNGs or vector SVGs look best.' }
+  ];
+
+  useEffect(() => {
+    if (logoFile) {
+      const url = URL.createObjectURL(logoFile);
+      setLogoPreview(url);
+      return () => URL.revokeObjectURL(url);
+    }
+  }, [logoFile]);
+
+  const handleFileSelect = (newFiles) => {
+    if (newFiles && newFiles.length > 0) {
+      setFiles(prev => [...prev, ...newFiles]);
+      if (!selectedFile) setSelectedFile(newFiles[0]);
+    }
+  };
+
+  const removeFile = (id, e) => {
+    e.stopPropagation();
+    const filtered = files.filter(f => f.id !== id);
+    setFiles(filtered);
+    if (selectedFile?.id === id) {
+      setSelectedFile(filtered.length > 0 ? filtered[0] : null);
+    }
+  };
+
+  // Helper to draw watermark on canvas
+  const drawWatermark = (canvas, ctx, img, logoImg) => {
+    const w = canvas.width;
+    const h = canvas.height;
+
+    // Draw main image
+    ctx.drawImage(img, 0, 0, w, h);
+
+    // Save context state
+    ctx.save();
+
+    if (type === 'text') {
+      // Configure Font
+      let fontStr = '';
+      if (italic) fontStr += 'italic ';
+      if (bold) fontStr += 'bold ';
+      fontStr += `${fontSize}px ${fontFamily}`;
+      ctx.font = fontStr;
+      ctx.fillStyle = color;
+      ctx.globalAlpha = opacity;
+      ctx.textBaseline = 'middle';
+
+      if (tile) {
+        // Tiled Grid Watermark
+        ctx.textAlign = 'center';
+        // Add rotation
+        const rad = (rotation * Math.PI) / 180;
+        const textWidth = ctx.measureText(text).width || 150;
+        const xGap = textWidth + 100;
+        const yGap = fontSize + 120;
+
+        for (let x = -w; x < w * 2; x += xGap) {
+          for (let y = -h; y < h * 2; y += yGap) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(rad);
+            ctx.fillText(text, 0, 0);
+            ctx.restore();
+          }
+        }
+      } else {
+        // Single Watermark
+        const textWidth = ctx.measureText(text).width;
+        let { x, y, align } = getCoords(w, h, textWidth, fontSize);
+        ctx.textAlign = align;
+
+        ctx.translate(x, y);
+        if (rotation !== 0) {
+          ctx.rotate((rotation * Math.PI) / 180);
+        }
+        ctx.fillText(text, 0, 0);
+      }
+    } else if (type === 'image' && logoImg) {
+      // Image Watermark
+      const logoW = w * (logoScale / 100);
+      const logoH = logoImg.height * (logoW / logoImg.width);
+      ctx.globalAlpha = logoOpacity;
+
+      let { x, y } = getCoords(w, h, logoW, logoH, true);
+
+      // Rotate logo around its center
+      ctx.translate(x + logoW / 2, y + logoH / 2);
+      if (logoRotation !== 0) {
+        ctx.rotate((logoRotation * Math.PI) / 180);
+      }
+      ctx.drawImage(logoImg, -logoW / 2, -logoH / 2, logoW, logoH);
+    }
+
+    ctx.restore();
+  };
+
+  const getCoords = (canvasW, canvasH, itemW, itemH, isImage = false) => {
+    let x = 0, y = 0, align = 'center';
+    const padding = 20;
+
+    switch (position) {
+      case 'top-left':
+        x = padding;
+        y = padding + (isImage ? 0 : itemH / 2);
+        align = 'left';
+        break;
+      case 'top-right':
+        x = canvasW - padding - (isImage ? itemW : 0);
+        y = padding + (isImage ? 0 : itemH / 2);
+        align = isImage ? 'left' : 'right';
+        break;
+      case 'bottom-left':
+        x = padding;
+        y = canvasH - padding - (isImage ? itemH : itemH / 2);
+        align = 'left';
+        break;
+      case 'bottom-right':
+        x = canvasW - padding - (isImage ? itemW : 0);
+        y = canvasH - padding - (isImage ? itemH : itemH / 2);
+        align = isImage ? 'left' : 'right';
+        break;
+      case 'custom':
+        x = (canvasW * customX) / 100 - (isImage ? itemW / 2 : 0);
+        y = (canvasH * customY) / 100 - (isImage ? itemH / 2 : 0);
+        align = 'center';
+        break;
+      case 'center':
+      default:
+        x = canvasW / 2 - (isImage ? itemW / 2 : 0);
+        y = canvasH / 2 - (isImage ? itemH / 2 : 0);
+        align = 'center';
+        break;
+    }
+
+    return { x, y, align };
+  };
+
+  // Process a single file to a blob
+  const processImage = (fileObj, logoImg) => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth || img.width;
+          canvas.height = img.naturalHeight || img.height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) throw new Error('Canvas context failed');
+
+          drawWatermark(canvas, ctx, img, logoImg);
+
+          const mimeMap = {
+            'Original': fileObj.type,
+            'JPG': 'image/jpeg',
+            'PNG': 'image/png',
+            'WebP': 'image/webp'
+          };
+          const mime = mimeMap[saveFormat] || fileObj.type;
+          canvas.toBlob(blob => {
+            if (blob) {
+              const extMap = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+              const ext = extMap[mime] || 'jpg';
+              const nameWithoutExt = fileObj.name.replace(/\.[^/.]+$/, '');
+              resolve({ blob, name: `${nameWithoutExt}_watermarked.${ext}` });
+            } else {
+              reject(new Error('Export failed'));
+            }
+          }, mime, 0.92);
+        } catch (e) {
+          reject(e);
+        }
+      };
+      img.onerror = () => reject(new Error('Image load failed'));
+      img.src = fileObj.preview;
+    });
+  };
+
+  const loadLogoImage = () => {
+    return new Promise((resolve) => {
+      if (type === 'image' && logoPreview) {
+        const logoImg = new Image();
+        logoImg.onload = () => resolve(logoImg);
+        logoImg.onerror = () => resolve(null);
+        logoImg.src = logoPreview;
+      } else {
+        resolve(null);
+      }
+    });
+  };
+
+  // Download all files as a consolidated ZIP
+  const downloadAllAsZip = async () => {
+    if (files.length === 0) return;
+    setIsProcessing(true);
+    setProcessedCount(0);
+
+    try {
+      const JSZipModule = await import('jszip');
+      const JSZip = JSZipModule.default;
+      const zip = new JSZip();
+      
+      const logoImg = await loadLogoImage();
+
+      for (let i = 0; i < files.length; i++) {
+        const fileObj = files[i];
+        const { blob, name } = await processImage(fileObj, logoImg);
+        zip.file(name, blob);
+        setProcessedCount(i + 1);
+      }
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      saveAs(zipBlob, 'watermarked_images.zip');
+      saveHistory('Image Watermarker', `watermarked_images.zip (${files.length} images)`);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to package ZIP archive. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Download individual watermarked images
+  const downloadAllIndividually = async () => {
+    if (files.length === 0) return;
+    setIsProcessing(true);
+    setProcessedCount(0);
+
+    try {
+      const logoImg = await loadLogoImage();
+      for (let i = 0; i < files.length; i++) {
+        const fileObj = files[i];
+        const { blob, name } = await processImage(fileObj, logoImg);
+        saveAs(blob, name);
+        setProcessedCount(i + 1);
+      }
+      saveHistory('Image Watermarker', `${files.length} files downloaded individually`);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const cardStyle = {
+    background: '#fff',
+    border: '1px solid #E4E4EF',
+    borderRadius: 20,
+    padding: '24px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04)',
+    height: 'fit-content'
+  };
+
+  const sidebarLabel = { fontSize: 11, fontWeight: 700, color: '#6B6B8A', textTransform: 'uppercase', display: 'block', marginBottom: 6 };
+  
+  return (
+    <ToolPageShell
+      title="Image Watermarker & Logo Overlayer"
+      subtitle="Protect your visual assets. Add customizable text watermarks or brand logo overlays in bulk, locally in your browser."
+      features={_FEATURES}
+      steps={_STEPS}
+      faqs={_FAQS}
+      seoText="Watermark images online in bulk. Add text watermarks or transparent PNG logos to multiple photos at once. Completely local, free, private."
+    >
+      {files.length === 0 ? (
+        <div style={{ maxWidth: 680, margin: '0 auto', width: '100%' }}>
+          <UploadBox
+            onFileSelect={handleFileSelect}
+            acceptedFormats={['.jpg', '.jpeg', '.png', '.webp']}
+            multiple={true}
+          />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-scale-in">
+          
+          {/* Left: Files List Sidebar */}
+          <div className="lg:col-span-3" style={cardStyle}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, borderBottom: '1px solid #F1F1F7', paddingBottom: 10 }}>
+              <span style={{ fontSize: 11, fontWeight: 800, color: '#9898B5', textTransform: 'uppercase' }}>Files ({files.length})</span>
+              <button onClick={() => { setFiles([]); setSelectedFile(null); }} style={{ fontSize: 10, fontWeight: 700, color: '#EF4444', border: 'none', background: 'none', cursor: 'pointer' }}>Clear All</button>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 300, overflowY: 'auto', marginBottom: 12 }}>
+              {files.map(fileObj => (
+                <div
+                  key={fileObj.id}
+                  onClick={() => setSelectedFile(fileObj)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 10,
+                    border: `1.5px solid ${selectedFile?.id === fileObj.id ? '#5B5BD6' : '#E4E4EF'}`,
+                    background: selectedFile?.id === fileObj.id ? '#EEF0FF' : '#FAFAFF',
+                    cursor: 'pointer', transition: 'all 0.15s'
+                  }}
+                >
+                  <img src={fileObj.preview} alt="" style={{ width: 28, height: 28, objectFit: 'cover', borderRadius: 6, border: '1px solid #E4E4EF', flexShrink: 0 }} />
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#111128', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexGrow: 1 }} title={fileObj.name}>{fileObj.name}</span>
+                  <button type="button" onClick={(e) => removeFile(fileObj.id, e)} style={{ border: 'none', background: 'none', color: '#9898B5', cursor: 'pointer', fontSize: 12 }}>×</button>
+                </div>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => document.querySelector('input[type="file"]')?.click()}
+              style={{
+                width: '100%', padding: '10px', fontSize: 11, fontWeight: 700,
+                border: '2px dashed #D1D1E4', borderRadius: 12, background: '#F7F7FB',
+                color: '#5B5BD6', cursor: 'pointer', transition: 'all 0.2s',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = '#5B5BD6'; e.currentTarget.style.background = '#EDEDFB'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = '#D1D1E4'; e.currentTarget.style.background = '#F7F7FB'; }}
+            >
+              <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
+              Add Images
+            </button>
+            <input type="file" accept=".jpg,.jpeg,.png,.webp" multiple style={{ display: 'none' }}
+              onChange={e => {
+                const newFiles = Array.from(e.target.files || []).map(f =>
+                  Object.assign(f, { preview: URL.createObjectURL(f), id: Math.random().toString(36).slice(2, 9) })
+                );
+                handleFileSelect(newFiles);
+                e.target.value = '';
+              }}
+            />
+          </div>
+
+          {/* Middle: Canvas Preview */}
+          <div className="lg:col-span-5" style={{ ...cardStyle, padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid #E4E4EF' }}>
+              <h3 style={{ fontSize: 13, fontWeight: 700, color: '#111128', margin: 0 }}>Watermark Preview</h3>
+              <span style={{ fontSize: 10, color: '#9898B5', fontWeight: 600 }}>Real-time Rendering</span>
+            </div>
+
+            <div style={{
+              minHeight: 380, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+              background: 'repeating-conic-gradient(#F1F1F7 0% 25%, #fff 0% 50%) 0 0 / 20px 20px',
+              position: 'relative'
+            }}>
+              {selectedFile && (
+                <div style={{ position: 'relative', maxWidth: '100%', maxHeight: 440, display: 'inline-block', overflow: 'hidden', borderRadius: 10, boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
+                  {/* Base Image */}
+                  <img src={selectedFile.preview} alt="" style={{ maxWidth: '100%', maxHeight: 440, display: 'block', userSelect: 'none' }} />
+
+                  {/* Watermark Preview Layer via HTML elements overlaying the image */}
+                  <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+                    {type === 'text' ? (
+                      tile ? (
+                        <div style={{
+                          display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 32, padding: 20,
+                          transform: `rotate(${rotation}deg)`, transformOrigin: 'center', opacity: opacity,
+                          color: color, fontFamily: fontFamily, fontSize: `${fontSize * 0.5}px`, // scaled preview
+                          fontWeight: bold ? 'bold' : 'normal', fontStyle: italic ? 'italic' : 'normal',
+                          textAlign: 'center', width: '150%', height: '150%', margin: '-25%'
+                        }}>
+                          {Array.from({ length: 25 }).map((_, i) => (
+                            <span key={i} style={{ whiteSpace: 'nowrap' }}>{text}</span>
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={{
+                          position: 'absolute', opacity: opacity, color: color, fontFamily: fontFamily,
+                          fontSize: `${fontSize * 0.75}px`, fontWeight: bold ? 'bold' : 'normal',
+                          fontStyle: italic ? 'italic' : 'normal', transform: `rotate(${rotation}deg)`,
+                          transformOrigin: 'center',
+                          ...(() => {
+                            if (position === 'top-left') return { top: 16, left: 16 };
+                            if (position === 'top-right') return { top: 16, right: 16 };
+                            if (position === 'bottom-left') return { bottom: 16, left: 16 };
+                            if (position === 'bottom-right') return { bottom: 16, right: 16 };
+                            if (position === 'custom') return { top: `${customY}%`, left: `${customX}%`, transform: `translate(-50%, -50%) rotate(${rotation}deg)` };
+                            return { top: '50%', left: '50%', transform: `translate(-50%, -50%) rotate(${rotation}deg)` };
+                          })()
+                        }}>
+                          {text}
+                        </div>
+                      )
+                    ) : (
+                      logoPreview && (
+                        <img
+                          src={logoPreview}
+                          alt=""
+                          style={{
+                            position: 'absolute',
+                            width: `${logoScale}%`,
+                            opacity: logoOpacity,
+                            transform: `rotate(${logoRotation}deg) translate(-50%, -50%)`,
+                            transformOrigin: 'top left',
+                            ...(() => {
+                              if (position === 'top-left') return { top: `${logoScale * 0.5}%`, left: `${logoScale * 0.5}%` };
+                              if (position === 'top-right') return { top: `${logoScale * 0.5}%`, right: 0 };
+                              if (position === 'bottom-left') return { bottom: 0, left: `${logoScale * 0.5}%` };
+                              if (position === 'bottom-right') return { bottom: 0, right: 0 };
+                              if (position === 'custom') return { top: `${customY}%`, left: `${customX}%` };
+                              return { top: '50%', left: '50%' };
+                            })()
+                          }}
+                        />
+                      )
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right: Controls Panel */}
+          <div className="lg:col-span-4" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            
+            {/* Watermark Type Selector */}
+            <div style={cardStyle}>
+              <span style={sidebarLabel}>Watermark Type</span>
+              <div style={{ display: 'flex', background: '#F1F1F7', border: '1px solid #E4E4EF', borderRadius: 10, padding: 3 }}>
+                <button
+                  onClick={() => setType('text')}
+                  style={{
+                    flex: 1, padding: '6px 0', fontSize: 11, fontWeight: 700, borderRadius: 7, border: 'none', cursor: 'pointer',
+                    background: type === 'text' ? '#fff' : 'transparent', color: type === 'text' ? '#5B5BD6' : '#9898B5',
+                    boxShadow: type === 'text' ? '0 1px 4px rgba(0,0,0,0.1)' : 'none', transition: 'all 0.15s'
+                  }}
+                >
+                  Text Watermark
+                </button>
+                <button
+                  onClick={() => setType('image')}
+                  style={{
+                    flex: 1, padding: '6px 0', fontSize: 11, fontWeight: 700, borderRadius: 7, border: 'none', cursor: 'pointer',
+                    background: type === 'image' ? '#fff' : 'transparent', color: type === 'image' ? '#5B5BD6' : '#9898B5',
+                    boxShadow: type === 'image' ? '0 1px 4px rgba(0,0,0,0.1)' : 'none', transition: 'all 0.15s'
+                  }}
+                >
+                  Logo Overlay
+                </button>
+              </div>
+            </div>
+
+            {/* Template editor */}
+            {type === 'text' ? (
+              <div style={cardStyle}>
+                <h3 style={{ fontSize: 12, fontWeight: 800, color: '#9898B5', textTransform: 'uppercase', letterSpacing: '0.04em', margin: '0 0 14px' }}>Text Settings</h3>
+                
+                <div style={{ marginBottom: 12 }}>
+                  <label style={sidebarLabel}>Watermark Text</label>
+                  <input type="text" value={text} onChange={e => setText(e.target.value)} style={{ width: '100%', padding: '9px 12px', background: '#F7F7FB', border: '1px solid #E4E4EF', borderRadius: 9, fontSize: 13, fontWeight: 700, color: '#111128', outline: 'none' }} />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: 10, marginBottom: 12 }}>
+                  <div>
+                    <label style={sidebarLabel}>Font Family</label>
+                    <select value={fontFamily} onChange={e => setFontFamily(e.target.value)} style={{ width: '100%', padding: '9px 12px', background: '#F7F7FB', border: '1px solid #E4E4EF', borderRadius: 9, fontSize: 12, fontWeight: 700, color: '#111128', outline: 'none' }}>
+                      <option value="sans-serif">Sans-Serif</option>
+                      <option value="serif">Serif</option>
+                      <option value="monospace">Monospace</option>
+                      <option value="cursive">Cursive</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={sidebarLabel}>Text Color</label>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <input type="color" value={color} onChange={e => setColor(e.target.value)} style={{ border: 'none', background: 'none', width: 34, height: 34, cursor: 'pointer', padding: 0 }} />
+                      <span style={{ fontSize: 11, fontWeight: 700, fontFamily: 'monospace' }}>{color.toUpperCase()}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                  <button onClick={() => setBold(!bold)} style={{ flex: 1, padding: 8, fontSize: 11, fontWeight: 700, borderRadius: 8, border: `1px solid ${bold ? '#5B5BD6' : '#E4E4EF'}`, background: bold ? '#EEF0FF' : '#FAFAFF', color: bold ? '#5B5BD6' : '#6B6B8A', cursor: 'pointer' }}>Bold</button>
+                  <button onClick={() => setItalic(!italic)} style={{ flex: 1, padding: 8, fontSize: 11, fontWeight: 700, borderRadius: 8, border: `1px solid ${italic ? '#5B5BD6' : '#E4E4EF'}`, background: italic ? '#EEF0FF' : '#FAFAFF', color: italic ? '#5B5BD6' : '#6B6B8A', cursor: 'pointer' }}>Italic</button>
+                  <button onClick={() => setTile(!tile)} style={{ flex: 1.5, padding: 8, fontSize: 11, fontWeight: 700, borderRadius: 8, border: `1px solid ${tile ? '#5B5BD6' : '#E4E4EF'}`, background: tile ? '#EEF0FF' : '#FAFAFF', color: tile ? '#5B5BD6' : '#6B6B8A', cursor: 'pointer' }}>Grid Tile</button>
+                </div>
+
+                {/* Opacity, Rotation, Size sliders */}
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={sidebarLabel}>Font Size</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#5B5BD6' }}>{fontSize}px</span>
+                  </div>
+                  <input type="range" min="12" max="120" step="1" value={fontSize} onChange={e => setFontSize(parseInt(e.target.value))} style={{ width: '100%', accentColor: '#5B5BD6', cursor: 'pointer' }} />
+                </div>
+
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={sidebarLabel}>Opacity</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#5B5BD6' }}>{Math.round(opacity * 100)}%</span>
+                  </div>
+                  <input type="range" min="0.1" max="1" step="0.05" value={opacity} onChange={e => setOpacity(parseFloat(e.target.value))} style={{ width: '100%', accentColor: '#5B5BD6', cursor: 'pointer' }} />
+                </div>
+
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={sidebarLabel}>Rotation</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#5B5BD6' }}>{rotation}°</span>
+                  </div>
+                  <input type="range" min="-180" max="180" step="5" value={rotation} onChange={e => setRotation(parseInt(e.target.value))} style={{ width: '100%', accentColor: '#5B5BD6', cursor: 'pointer' }} />
+                </div>
+
+              </div>
+            ) : (
+              <div style={cardStyle}>
+                <h3 style={{ fontSize: 12, fontWeight: 800, color: '#9898B5', textTransform: 'uppercase', letterSpacing: '0.04em', margin: '0 0 14px' }}>Logo settings</h3>
+                
+                {!logoFile ? (
+                  <UploadBox
+                    onFileSelect={(f) => setLogoFile(f[0])}
+                    acceptedFormats={['.png', '.svg', '.jpg', '.jpeg', '.webp']}
+                    multiple={false}
+                    buttonLabel="Upload PNG Logo"
+                    maxSizeMB={5}
+                  />
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyBetween: 'space-between', gap: 10, padding: 8, background: '#F7F7FB', borderRadius: 8, border: '1px solid #E4E4EF' }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#111128', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexGrow: 1 }}>{logoFile.name}</span>
+                      <button onClick={() => { setLogoFile(null); setLogoPreview(''); }} style={{ border: 'none', background: 'none', color: '#EF4444', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>Delete</button>
+                    </div>
+
+                    <div style={{ marginBottom: 10 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={sidebarLabel}>Logo Size Scale</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#5B5BD6' }}>{logoScale}%</span>
+                      </div>
+                      <input type="range" min="5" max="60" step="1" value={logoScale} onChange={e => setLogoScale(parseInt(e.target.value))} style={{ width: '100%', accentColor: '#5B5BD6', cursor: 'pointer' }} />
+                    </div>
+
+                    <div style={{ marginBottom: 10 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={sidebarLabel}>Opacity</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#5B5BD6' }}>{Math.round(logoOpacity * 100)}%</span>
+                      </div>
+                      <input type="range" min="0.1" max="1" step="0.05" value={logoOpacity} onChange={e => setLogoOpacity(parseFloat(e.target.value))} style={{ width: '100%', accentColor: '#5B5BD6', cursor: 'pointer' }} />
+                    </div>
+
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={sidebarLabel}>Rotation</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#5B5BD6' }}>{logoRotation}°</span>
+                      </div>
+                      <input type="range" min="-180" max="180" step="5" value={logoRotation} onChange={e => setLogoRotation(parseInt(e.target.value))} style={{ width: '100%', accentColor: '#5B5BD6', cursor: 'pointer' }} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Position Controls */}
+            {(!tile || type === 'image') && (
+              <div style={cardStyle}>
+                <h3 style={{ fontSize: 12, fontWeight: 800, color: '#9898B5', textTransform: 'uppercase', letterSpacing: '0.04em', margin: '0 0 12px' }}>Positioning</h3>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, marginBottom: 12 }}>
+                  {[
+                    { id: 'top-left', label: 'Top Left' },
+                    { id: 'center', label: 'Center' },
+                    { id: 'top-right', label: 'Top Right' },
+                    { id: 'bottom-left', label: 'Btm Left' },
+                    { id: 'custom', label: 'Custom' },
+                    { id: 'bottom-right', label: 'Btm Right' }
+                  ].map(p => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setPosition(p.id)}
+                      style={{
+                        padding: '8px 2px', fontSize: 10, fontWeight: 700, borderRadius: 8, cursor: 'pointer',
+                        border: `1.5px solid ${position === p.id ? '#5B5BD6' : '#E4E4EF'}`,
+                        background: position === p.id ? '#EEF0FF' : '#FAFAFF',
+                        color: position === p.id ? '#5B5BD6' : '#6B6B8A',
+                        transition: 'all 0.15s'
+                      }}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+
+                {position === 'custom' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }} className="animate-fade-in">
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: '#9898B5' }}>Horizontal Offset (X)</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#5B5BD6' }}>{customX}%</span>
+                      </div>
+                      <input type="range" min="0" max="100" value={customX} onChange={e => setCustomX(parseInt(e.target.value))} style={{ width: '100%', accentColor: '#5B5BD6', cursor: 'pointer' }} />
+                    </div>
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: '#9898B5' }}>Vertical Offset (Y)</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#5B5BD6' }}>{customY}%</span>
+                      </div>
+                      <input type="range" min="0" max="100" value={customY} onChange={e => setCustomY(parseInt(e.target.value))} style={{ width: '100%', accentColor: '#5B5BD6', cursor: 'pointer' }} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Save & Download Options */}
+            <div style={cardStyle}>
+              <h3 style={{ fontSize: 12, fontWeight: 800, color: '#9898B5', textTransform: 'uppercase', letterSpacing: '0.04em', margin: '0 0 10px' }}>Save Settings</h3>
+              
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4, background: '#F1F1F7', border: '1px solid #E4E4EF', borderRadius: 9, padding: 3 }}>
+                  {['Original', 'JPG', 'PNG', 'WebP'].map(f => (
+                    <button
+                      key={f}
+                      type="button"
+                      onClick={() => setSaveFormat(f)}
+                      style={{
+                        padding: '6px 2px', fontSize: 10, fontWeight: 700, borderRadius: 6, border: 'none', cursor: 'pointer',
+                        background: saveFormat === f ? '#fff' : 'transparent',
+                        color: saveFormat === f ? '#5B5BD6' : '#9898B5',
+                        boxShadow: saveFormat === f ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                        transition: 'all 0.15s'
+                      }}
+                    >
+                      {f}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {isProcessing && files.length > 1 && (
+                <div style={{ fontSize: 11, color: '#5B5BD6', fontWeight: 700, marginBottom: 8, textAlign: 'center' }}>
+                  Processing: {processedCount} of {files.length} images...
+                </div>
+              )}
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {files.length > 1 ? (
+                  <>
+                    <button
+                      type="button"
+                      disabled={isProcessing || (type === 'image' && !logoFile)}
+                      onClick={downloadAllAsZip}
+                      style={{
+                        width: '100%', background: 'linear-gradient(135deg, #5B5BD6 0%, #7C3AED 100%)', color: '#fff',
+                        fontWeight: 800, fontSize: 13, borderRadius: 12, padding: '12px', border: 'none', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        boxShadow: '0 4px 14px rgba(91,91,214,0.3)', transition: 'all 0.18s'
+                      }}
+                    >
+                      <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                      Download All as ZIP
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isProcessing || (type === 'image' && !logoFile)}
+                      onClick={downloadAllIndividually}
+                      style={{
+                        width: '100%', background: '#fff', border: '1px solid #E4E4EF', color: '#6B6B8A',
+                        fontWeight: 700, fontSize: 11, borderRadius: 10, padding: '8px', cursor: 'pointer',
+                        transition: 'all 0.15s'
+                      }}
+                    >
+                      Download Individually
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={isProcessing || (type === 'image' && !logoFile)}
+                    onClick={async () => {
+                      setIsProcessing(true);
+                      try {
+                        const logoImg = await loadLogoImage();
+                        const { blob, name } = await processImage(files[0], logoImg);
+                        saveAs(blob, name);
+                        saveHistory('Image Watermarker', `${files[0].name} (Watermarked)`);
+                      } catch (e) {
+                        console.error(e);
+                      } finally {
+                        setIsProcessing(false);
+                      }
+                    }}
+                    style={{
+                      width: '100%',
+                      background: 'linear-gradient(135deg, #16A34A 0%, #15803D 100%)',
+                      color: '#fff',
+                      fontWeight: 800,
+                      fontSize: 13,
+                      borderRadius: 12,
+                      padding: '13px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      boxShadow: '0 4px 14px rgba(22,163,74,0.28)',
+                      transition: 'all 0.18s'
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 6px 24px rgba(22,163,74,0.38)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 4px 14px rgba(22,163,74,0.28)'; e.currentTarget.style.transform = 'none'; }}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Download Watermarked
+                  </button>
+                )}
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      )}
+    </ToolPageShell>
+  );
+}
