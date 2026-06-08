@@ -939,91 +939,146 @@ export default function MetadataPage() {
     return boxes;
   };
 
+
+  // ── JUMBF/C2PA box processor ────────────────────────────────────────────────
+  // JUMBF structure: jumb (superbox) → [jumd (description), content/more jumb boxes]
+  // jumd has uuid+label but NO children. jumb has children[] but no uuid/label directly.
+  // So: to identify a jumb box, check its first jumd child's uuid/label.
   const processC2paBoxes = (boxes, view, tags) => {
     try {
-      const findBoxesByUuid = (list, targetUuidStr) => {
+      // Get the label of a jumb box from its first jumd child
+      const getJumbLabel = (box) => {
+        if (box.type !== 'jumb' || !box.children) return null;
+        const jumd = box.children.find(b => b.type === 'jumd');
+        return jumd ? jumd.label || null : null;
+      };
+      const getJumbUuid = (box) => {
+        if (box.type !== 'jumb' || !box.children) return null;
+        const jumd = box.children.find(b => b.type === 'jumd');
+        return jumd ? jumd.uuid || null : null;
+      };
+      const formatUuidArr = (uuid) => formatUuid(uuid);
+
+      // Recursively find all jumb superboxes whose jumd child has the target uuid string
+      const findJumbByUuid = (list, targetUuidStr) => {
         let found = [];
         for (const box of list) {
-          if (box.uuid && formatUuid(box.uuid) === targetUuidStr) {
+          const uuid = getJumbUuid(box);
+          if (uuid && formatUuidArr(uuid) === targetUuidStr) {
             found.push(box);
           }
           if (box.children) {
-            found = found.concat(findBoxesByUuid(box.children, targetUuidStr));
+            found = found.concat(findJumbByUuid(box.children, targetUuidStr));
           }
         }
         return found;
       };
 
-      const allC2paBoxes = findBoxesByUuid(boxes, '(c2pa)-0011-0010-800000aa00389b71');
-      if (allC2paBoxes.length === 0) return;
+      // Find a jumb superbox whose jumd child label includes the given string
+      const findJumbByLabel = (list, labelSubstr) => {
+        for (const box of list) {
+          const label = getJumbLabel(box);
+          if (label && (label === labelSubstr || label.includes(labelSubstr))) {
+            return box;
+          }
+          if (box.children) {
+            const result = findJumbByLabel(box.children, labelSubstr);
+            if (result) return result;
+          }
+        }
+        return null;
+      };
 
-      const manifestBox = allC2paBoxes[0];
-      const item2Label = allC2paBoxes.length > 1 ? manifestBox.label : 'null';
+      // C2PA manifest store UUID
+      const C2PA_UUID = '(c2pa)-0011-0010-800000aa00389b71';
+      const manifestStores = findJumbByUuid(boxes, C2PA_UUID);
+      if (manifestStores.length === 0) return;
 
-      const claimBox = manifestBox.children?.find(b => b.label === 'c2pa.claim' || b.label?.endsWith('c2pa.claim'));
-      const assertionsBox = manifestBox.children?.find(b => b.label === 'c2pa.assertions' || b.label?.endsWith('c2pa.assertions'));
+      const manifestStore = manifestStores[0];
+      const storeJumd = manifestStore.children?.find(b => b.type === 'jumd');
+
+      // The manifest store contains child jumb boxes (one per manifest)
+      const manifestJumbs = manifestStore.children?.filter(b => b.type === 'jumb') || [];
+      // The active manifest is typically the last one (or the one with a c2pa claim)
+      const activeManifest = manifestJumbs.find(j => findJumbByLabel([j], 'c2pa.claim')) || manifestJumbs[manifestJumbs.length - 1];
+
+      if (!activeManifest) {
+        // Fallback: just show that C2PA data was detected
+        const jumdLabel = storeJumd?.label || 'c2pa';
+        const jumdUuid = storeJumd?.uuid ? formatUuidArr(storeJumd.uuid) : C2PA_UUID;
+        tags.allTags.push({ tag: 0, hex: '0x0000', group: 'Content Credentials', name: 'JUMD Type', desc: 'C2PA JUMD Box UUID Type', raw: jumdUuid, formatted: jumdUuid });
+        tags.allTags.push({ tag: 0, hex: '0x0000', group: 'Content Credentials', name: 'JUMD Label', desc: 'C2PA JUMD Box Label', raw: jumdLabel, formatted: jumdLabel });
+        tags.detectedSegments = tags.detectedSegments || {};
+        tags.detectedSegments.otherApp = tags.detectedSegments.otherApp || [];
+        if (!tags.detectedSegments.otherApp.includes('C2PA')) tags.detectedSegments.otherApp.push('C2PA');
+        return;
+      }
+
+      const manifestJumd = activeManifest.children?.find(b => b.type === 'jumd');
+      const manifestLabel = manifestJumd?.label || '';
+      const storeLabel = storeJumd?.label || 'c2pa';
+      const storeUuid = storeJumd?.uuid ? formatUuidArr(storeJumd.uuid) : C2PA_UUID;
+
+      // Find claim and assertions within the active manifest
+      const claimJumb = findJumbByLabel([activeManifest], 'c2pa.claim');
+      const assertionsJumb = findJumbByLabel([activeManifest], 'c2pa.assertions');
 
       let claimData = null;
       let claimGenName = '';
       let claimGenVer = '';
       let instanceId = '';
       let assertionUrls = [];
-      let signatureUrl = 'self#jumbf=c2pa.signature';
-      let alg = 'sha256';
+      let signatureUrl = '';
+      let alg = '';
       let exclusionsStart = '';
       let exclusionsLength = '';
 
-      if (claimBox) {
-        const claimContentBox = claimBox.children?.find(b => b.type !== 'jumd');
-        if (claimContentBox) {
-          const payloadBytes = new Uint8Array(view.buffer, view.byteOffset + claimContentBox.payloadOffset, claimContentBox.payloadLen);
-          claimData = decodeCbor(payloadBytes);
-          
-          if (claimData) {
-            if (typeof claimData.claim_generator === 'string') {
-              const parts = claimData.claim_generator.split('/');
-              claimGenName = parts[0];
-              claimGenVer = parts[1] || '';
-            } else if (claimData.claim_generator && typeof claimData.claim_generator === 'object') {
-              claimGenName = claimData.claim_generator.name || '';
-              claimGenVer = claimData.claim_generator.version || '';
-            }
-
-            instanceId = claimData.instance_id || claimData.instanceID || '';
-            if (typeof instanceId === 'string') {
-              instanceId = instanceId.replace(/^(xmp:iid:|urn:uuid:)/i, '');
-            }
-
-            if (Array.isArray(claimData.assertions)) {
-              assertionUrls = claimData.assertions.map(a => a.url).filter(Boolean);
-            }
-
-            if (claimData.signature) {
-              signatureUrl = claimData.signature;
-            }
-
-            if (claimData.alg) {
-              alg = claimData.alg;
-            }
-
-            const findExclusions = (obj) => {
-              if (!obj || typeof obj !== 'object') return null;
-              if (obj.exclusions && Array.isArray(obj.exclusions)) {
-                return obj.exclusions;
+      if (claimJumb) {
+        // Content box = non-jumd child of claimJumb
+        const contentBox = claimJumb.children?.find(b => b.type !== 'jumd');
+        if (contentBox) {
+          try {
+            const payloadBytes = new Uint8Array(view.buffer, view.byteOffset + contentBox.payloadOffset, contentBox.payloadLen);
+            claimData = decodeCbor(payloadBytes);
+            if (claimData) {
+              // Parse claim generator
+              if (Array.isArray(claimData.claim_generator_info)) {
+                const genInfo = claimData.claim_generator_info[0];
+                claimGenName = genInfo?.name || '';
+                claimGenVer = String(genInfo?.version || '');
+              } else if (typeof claimData.claim_generator === 'string') {
+                const parts = claimData.claim_generator.split('/');
+                claimGenName = parts[0].trim();
+                claimGenVer = parts.slice(1).join('/').trim();
+              } else if (claimData.claim_generator && typeof claimData.claim_generator === 'object') {
+                claimGenName = claimData.claim_generator.name || '';
+                claimGenVer = String(claimData.claim_generator.version || '');
               }
-              for (const k in obj) {
-                const res = findExclusions(obj[k]);
-                if (res) return res;
+              // Instance ID
+              instanceId = claimData.instance_id || claimData.instanceID || '';
+              if (typeof instanceId === 'string') instanceId = instanceId.replace(/^(xmp:iid:|urn:uuid:)/i, '');
+              // Assertion URLs
+              if (Array.isArray(claimData.assertions)) {
+                assertionUrls = claimData.assertions.map(a => a.url).filter(Boolean);
               }
-              return null;
-            };
-
-            const exclusionsList = findExclusions(claimData);
-            if (exclusionsList && exclusionsList[0]) {
-              exclusionsStart = exclusionsList[0].start !== undefined ? exclusionsList[0].start : '';
-              exclusionsLength = exclusionsList[0].length !== undefined ? exclusionsList[0].length : '';
+              // Signature
+              if (claimData.signature) signatureUrl = claimData.signature;
+              // Algorithm
+              if (claimData.alg) alg = claimData.alg;
+              // Exclusions
+              const findExclusions = (obj) => {
+                if (!obj || typeof obj !== 'object') return null;
+                if (obj.exclusions && Array.isArray(obj.exclusions)) return obj.exclusions;
+                for (const k in obj) { const r = findExclusions(obj[k]); if (r) return r; }
+                return null;
+              };
+              const excl = findExclusions(claimData);
+              if (excl && excl[0]) {
+                exclusionsStart = excl[0].start !== undefined ? excl[0].start : '';
+                exclusionsLength = excl[0].length !== undefined ? excl[0].length : '';
+              }
             }
-          }
+          } catch (e) { console.warn('CBOR decode error for claim:', e); }
         }
       }
 
@@ -1033,178 +1088,72 @@ export default function MetadataPage() {
       let actionsIngredients = [];
       let relationship = '';
 
-      if (assertionsBox && assertionsBox.children) {
-        assertionsBox.children.forEach(assertionBox => {
-          const contentBox = assertionBox.children?.find(b => b.type !== 'jumd');
+      if (assertionsJumb) {
+        const assertionItems = assertionsJumb.children?.filter(b => b.type === 'jumb') || [];
+        assertionItems.forEach(assertionJumb => {
+          const assertionJumd = assertionJumb.children?.find(b => b.type === 'jumd');
+          const label = assertionJumd?.label || '';
+          const contentBox = assertionJumb.children?.find(b => b.type !== 'jumd');
           if (contentBox) {
-            const assertionContentBytes = new Uint8Array(view.buffer, view.byteOffset + contentBox.payloadOffset, contentBox.payloadLen);
-            const label = assertionBox.label || '';
-            
-            if (label.includes('c2pa.actions')) {
-              const actionsPayload = decodeCbor(assertionContentBytes);
-              if (actionsPayload && Array.isArray(actionsPayload.actions)) {
-                actionsPayload.actions.forEach(act => {
-                  if (act.action) actionsList.push(act.action);
-                  if (act.description) actionsDescriptions.push(act.description);
-                  if (act.digitalSourceType) actionsSourceTypes.push(act.digitalSourceType);
-                  if (act.parameters?.ingredients) {
-                    act.parameters.ingredients.forEach(ing => {
-                      if (ing.url) actionsIngredients.push(ing.url);
-                    });
-                  }
-                });
+            try {
+              const bytes = new Uint8Array(view.buffer, view.byteOffset + contentBox.payloadOffset, contentBox.payloadLen);
+              if (label.includes('c2pa.actions')) {
+                const payload = decodeCbor(bytes);
+                if (payload && Array.isArray(payload.actions)) {
+                  payload.actions.forEach(act => {
+                    if (act.action) actionsList.push(act.action);
+                    if (act.description) actionsDescriptions.push(act.description);
+                    if (act.digitalSourceType) actionsSourceTypes.push(act.digitalSourceType);
+                    if (act.softwareAgent) {} // skip
+                    if (act.parameters?.ingredients) {
+                      act.parameters.ingredients.forEach(ing => { if (ing.url) actionsIngredients.push(ing.url); });
+                    }
+                  });
+                }
+              } else if (label.includes('c2pa.ingredient')) {
+                const payload = decodeCbor(bytes);
+                if (payload?.relationship) relationship = payload.relationship;
               }
-            } else if (label.includes('c2pa.ingredient')) {
-              const ingPayload = decodeCbor(assertionContentBytes);
-              if (ingPayload && ingPayload.relationship) {
-                relationship = ingPayload.relationship;
-              }
-            }
+            } catch (e) { console.warn('CBOR decode error for assertion:', e); }
           }
         });
       }
 
-      // Only keep real parsed values — no hardcoded fallback filler
-
-      let manifestUrn = manifestBox.label || '';
-      if (!manifestUrn.startsWith('urn:')) {
-        if (claimData && typeof claimData.claim_uri === 'string') {
-          manifestUrn = claimData.claim_uri.replace(/\/c2pa\.claim$/, '').replace(/^self#jumbf=\/c2pa\//, '');
-        }
+      // Manifest URN from the manifest's jumd label
+      let manifestUrn = manifestLabel || '';
+      if (!manifestUrn && claimData?.claim_uri) {
+        manifestUrn = String(claimData.claim_uri).replace(/\/c2pa\.claim$/, '').replace(/^self#jumbf=\/c2pa\//, '');
       }
       manifestUrn = manifestUrn.replace(/^urn:c2pa:urn:c2pa:/i, 'urn:c2pa:');
 
-
-
-      tags.allTags.push({
-        tag: 0, hex: '0x0000', group: 'Content Credentials',
-        name: 'JUMD Type', desc: 'C2PA JUMD Box UUID Type',
-        raw: formatUuid(manifestBox.uuid), formatted: formatUuid(manifestBox.uuid)
-      });
-      tags.allTags.push({
-        tag: 0, hex: '0x0000', group: 'Content Credentials',
-        name: 'JUMD Label', desc: 'C2PA JUMD Box Label',
-        raw: manifestBox.label || 'c2pa', formatted: manifestBox.label || 'c2pa'
-      });
-      if (item2Label && item2Label !== 'null') {
-        tags.allTags.push({
-          tag: 0, hex: '0x0000', group: 'Content Credentials',
-          name: 'Item 2', desc: 'Second item in the manifest store',
-          raw: item2Label, formatted: item2Label
-        });
+      // ── Push all discovered tags ─────────────────────────────────────────────
+      tags.allTags.push({ tag: 0, hex: '0x0000', group: 'Content Credentials', name: 'JUMD Type', desc: 'C2PA JUMD Box UUID Type', raw: storeUuid, formatted: storeUuid });
+      tags.allTags.push({ tag: 0, hex: '0x0000', group: 'Content Credentials', name: 'JUMD Label', desc: 'C2PA JUMD Box Label', raw: storeLabel, formatted: storeLabel });
+      if (manifestJumbs.length > 1) {
+        const item2 = manifestJumbs.length > 1 ? (getJumbLabel(manifestJumbs[0]) || 'null') : 'null';
+        tags.allTags.push({ tag: 0, hex: '0x0000', group: 'Content Credentials', name: 'Item 2', desc: 'Second item in the manifest store', raw: item2, formatted: item2 });
       }
-      if (instanceId) {
-        tags.allTags.push({
-          tag: 0, hex: '0x0000', group: 'Content Credentials',
-          name: 'Instance ID', desc: 'Manifest Instance ID',
-          raw: instanceId, formatted: instanceId
-        });
-      }
-      if (claimGenName) {
-        tags.allTags.push({
-          tag: 0, hex: '0x0000', group: 'Content Credentials',
-          name: 'Claim Generator Info Name', desc: 'C2PA Claim Generator Name',
-          raw: claimGenName, formatted: claimGenName
-        });
-      }
-      if (claimGenVer) {
-        tags.allTags.push({
-          tag: 0, hex: '0x0000', group: 'Content Credentials',
-          name: 'Claim Generator Info Version', desc: 'C2PA Claim Generator Version',
-          raw: claimGenVer, formatted: claimGenVer
-        });
-      }
-
-      if (assertionUrls.length > 0) {
-        const assertionsStr = assertionUrls.join(', ');
-        tags.allTags.push({
-          tag: 0, hex: '0x0000', group: 'Content Credentials',
-          name: 'Created Assertions Url', desc: 'C2PA Assertions URLs',
-          raw: assertionsStr, formatted: assertionsStr
-        });
-      }
-
-      if (signatureUrl) {
-        tags.allTags.push({
-          tag: 0, hex: '0x0000', group: 'Content Credentials',
-          name: 'Signature', desc: 'C2PA Signature URL',
-          raw: signatureUrl, formatted: signatureUrl
-        });
-      }
-      if (alg) {
-        tags.allTags.push({
-          tag: 0, hex: '0x0000', group: 'Content Credentials',
-          name: 'Alg', desc: 'C2PA Hashing Algorithm',
-          raw: alg, formatted: alg
-        });
-      }
-      if (exclusionsStart !== '') {
-        tags.allTags.push({
-          tag: 0, hex: '0x0000', group: 'Content Credentials',
-          name: 'Exclusions Start', desc: 'C2PA Signature Exclusion Start Offset',
-          raw: exclusionsStart, formatted: exclusionsStart
-        });
-      }
-      if (exclusionsLength !== '') {
-        tags.allTags.push({
-          tag: 0, hex: '0x0000', group: 'Content Credentials',
-          name: 'Exclusions Length', desc: 'C2PA Signature Exclusion Range Length',
-          raw: exclusionsLength, formatted: exclusionsLength
-        });
-      }
-      if (actionsList.length > 0) {
-        tags.allTags.push({
-          tag: 0, hex: '0x0000', group: 'Content Credentials',
-          name: 'Actions Action', desc: 'C2PA Actions performed',
-          raw: actionsList.join(', '), formatted: actionsList.join(', ')
-        });
-      }
-      if (actionsDescriptions.length > 0) {
-        tags.allTags.push({
-          tag: 0, hex: '0x0000', group: 'Content Credentials',
-          name: 'Actions Description', desc: 'C2PA Actions descriptions',
-          raw: actionsDescriptions.join(', '), formatted: actionsDescriptions.join(', ')
-        });
-      }
-      if (actionsSourceTypes.length > 0) {
-        tags.allTags.push({
-          tag: 0, hex: '0x0000', group: 'Content Credentials',
-          name: 'Actions Digital Source Type', desc: 'C2PA Actions Digital Source Types',
-          raw: actionsSourceTypes.join(', '), formatted: actionsSourceTypes.join(', ')
-        });
-      }
-      if (actionsIngredients.length > 0) {
-        tags.allTags.push({
-          tag: 0, hex: '0x0000', group: 'Content Credentials',
-          name: 'Actions Parameters Ingredients Url', desc: 'C2PA Actions Ingredients URLs',
-          raw: actionsIngredients.join(', '), formatted: actionsIngredients.join(', ')
-        });
-      }
-      if (relationship) {
-        tags.allTags.push({
-          tag: 0, hex: '0x0000', group: 'Content Credentials',
-          name: 'Relationship', desc: 'C2PA Ingredients Relationship',
-          raw: relationship, formatted: relationship
-        });
-      }
+      if (instanceId) tags.allTags.push({ tag: 0, hex: '0x0000', group: 'Content Credentials', name: 'Instance ID', desc: 'Manifest Instance ID', raw: instanceId, formatted: instanceId });
+      if (claimGenName) tags.allTags.push({ tag: 0, hex: '0x0000', group: 'Content Credentials', name: 'Claim Generator Info Name', desc: 'C2PA Claim Generator Name', raw: claimGenName, formatted: claimGenName });
+      if (claimGenVer) tags.allTags.push({ tag: 0, hex: '0x0000', group: 'Content Credentials', name: 'Claim Generator Info Version', desc: 'C2PA Claim Generator Version', raw: claimGenVer, formatted: claimGenVer });
+      if (assertionUrls.length > 0) tags.allTags.push({ tag: 0, hex: '0x0000', group: 'Content Credentials', name: 'Created Assertions Url', desc: 'C2PA Assertions URLs', raw: assertionUrls.join(', '), formatted: assertionUrls.join(', ') });
+      if (signatureUrl) tags.allTags.push({ tag: 0, hex: '0x0000', group: 'Content Credentials', name: 'Signature', desc: 'C2PA Signature URL', raw: signatureUrl, formatted: signatureUrl });
+      if (alg) tags.allTags.push({ tag: 0, hex: '0x0000', group: 'Content Credentials', name: 'Alg', desc: 'C2PA Hashing Algorithm', raw: alg, formatted: alg });
+      if (exclusionsStart !== '') tags.allTags.push({ tag: 0, hex: '0x0000', group: 'Content Credentials', name: 'Exclusions Start', desc: 'C2PA Signature Exclusion Start Offset', raw: exclusionsStart, formatted: exclusionsStart });
+      if (exclusionsLength !== '') tags.allTags.push({ tag: 0, hex: '0x0000', group: 'Content Credentials', name: 'Exclusions Length', desc: 'C2PA Signature Exclusion Range Length', raw: exclusionsLength, formatted: exclusionsLength });
+      if (actionsList.length > 0) tags.allTags.push({ tag: 0, hex: '0x0000', group: 'Content Credentials', name: 'Actions Action', desc: 'C2PA Actions performed', raw: actionsList.join(', '), formatted: actionsList.join(', ') });
+      if (actionsDescriptions.length > 0) tags.allTags.push({ tag: 0, hex: '0x0000', group: 'Content Credentials', name: 'Actions Description', desc: 'C2PA Actions descriptions', raw: actionsDescriptions.join(', '), formatted: actionsDescriptions.join(', ') });
+      if (actionsSourceTypes.length > 0) tags.allTags.push({ tag: 0, hex: '0x0000', group: 'Content Credentials', name: 'Actions Digital Source Type', desc: 'C2PA Actions Digital Source Types', raw: actionsSourceTypes.join(', '), formatted: actionsSourceTypes.join(', ') });
+      if (actionsIngredients.length > 0) tags.allTags.push({ tag: 0, hex: '0x0000', group: 'Content Credentials', name: 'Actions Parameters Ingredients Url', desc: 'C2PA Actions Ingredients URLs', raw: actionsIngredients.join(', '), formatted: actionsIngredients.join(', ') });
+      if (relationship) tags.allTags.push({ tag: 0, hex: '0x0000', group: 'Content Credentials', name: 'Relationship', desc: 'C2PA Ingredients Relationship', raw: relationship, formatted: relationship });
       if (manifestUrn) {
-        tags.allTags.push({
-          tag: 0, hex: '0x0000', group: 'Content Credentials',
-          name: 'Active Manifest Url', desc: 'C2PA Active Manifest URL',
-          raw: `self#jumbf=/c2pa/${manifestUrn}`, formatted: `self#jumbf=/c2pa/${manifestUrn}`
-        });
-        tags.allTags.push({
-          tag: 0, hex: '0x0000', group: 'Content Credentials',
-          name: 'Claim Signature Url', desc: 'C2PA Claim Signature URL',
-          raw: `self#jumbf=/c2pa/${manifestUrn}/c2pa.signature`, formatted: `self#jumbf=/c2pa/${manifestUrn}/c2pa.signature`
-        });
+        tags.allTags.push({ tag: 0, hex: '0x0000', group: 'Content Credentials', name: 'Active Manifest Url', desc: 'C2PA Active Manifest URL', raw: `self#jumbf=/c2pa/${manifestUrn}`, formatted: `self#jumbf=/c2pa/${manifestUrn}` });
+        tags.allTags.push({ tag: 0, hex: '0x0000', group: 'Content Credentials', name: 'Claim Signature Url', desc: 'C2PA Claim Signature URL', raw: `self#jumbf=/c2pa/${manifestUrn}/c2pa.signature`, formatted: `self#jumbf=/c2pa/${manifestUrn}/c2pa.signature` });
       }
 
       tags.detectedSegments = tags.detectedSegments || {};
       tags.detectedSegments.otherApp = tags.detectedSegments.otherApp || [];
-      if (!tags.detectedSegments.otherApp.includes('C2PA')) {
-        tags.detectedSegments.otherApp.push('C2PA');
-      }
+      if (!tags.detectedSegments.otherApp.includes('C2PA')) tags.detectedSegments.otherApp.push('C2PA');
     } catch (e) {
       console.error('Error processing C2PA boxes:', e);
     }
