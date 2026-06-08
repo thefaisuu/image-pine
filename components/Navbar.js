@@ -11,7 +11,11 @@ export default function Navbar() {
   // Close mobile menu on outside click
   useEffect(() => {
     const handler = (e) => {
-      if (mobileRef.current && !mobileRef.current.contains(e.target)) {
+      if (
+        mobileRef.current && 
+        !mobileRef.current.contains(e.target) &&
+        !e.target.closest('button[aria-label="Toggle menu"]')
+      ) {
         setMobileOpen(false);
       }
     };
@@ -118,21 +122,42 @@ export default function Navbar() {
 
         {/* ── Right CTA ── */}
         <div className="hidden lg:flex" style={{ alignItems: 'center', gap: 8 }}>
-          <span style={{
-            display: 'flex', alignItems: 'center', gap: 5,
-            background: '#EDEDFB',
-            color: '#5B5BD6',
-            fontSize: 11, fontWeight: 700,
-            padding: '5px 12px',
-            borderRadius: 99,
-            letterSpacing: '0.03em',
-            textTransform: 'uppercase',
-          }}>
-            <svg width="10" height="10" viewBox="0 0 12 12" fill="currentColor">
-              <circle cx="6" cy="6" r="3" />
+          <a
+            href="https://buymeacoffee.com/imagepine"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              background: '#FF813F',
+              color: '#ffffff',
+              fontSize: 12,
+              fontWeight: 700,
+              padding: '6px 14px',
+              borderRadius: 99,
+              textDecoration: 'none',
+              boxShadow: '0 2px 8px rgba(255, 129, 63, 0.3)',
+              transition: 'all 0.18s ease',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.transform = 'translateY(-1px)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(255, 129, 63, 0.45)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.transform = 'none';
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(255, 129, 63, 0.3)';
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 8h1a4 4 0 1 1 0 8h-1" />
+              <path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z" />
+              <line x1="6" y1="2" x2="6" y2="4" />
+              <line x1="10" y1="2" x2="10" y2="4" />
+              <line x1="14" y1="2" x2="14" y2="4" />
             </svg>
-            Free Online
-          </span>
+            Buy Us a Coffee
+          </a>
         </div>
 
         {/* ── Mobile Hamburger ── */}
@@ -218,6 +243,36 @@ export default function Navbar() {
               )}
             </div>
           ))}
+          <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #F1F1F7' }}>
+            <a
+              href="https://buymeacoffee.com/imagepine"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                background: '#FF813F',
+                color: '#ffffff',
+                fontSize: 12,
+                fontWeight: 700,
+                padding: '10px',
+                borderRadius: 10,
+                textDecoration: 'none',
+                boxShadow: '0 2px 8px rgba(255, 129, 63, 0.3)',
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 8h1a4 4 0 1 1 0 8h-1" />
+                <path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z" />
+                <line x1="6" y1="2" x2="6" y2="4" />
+                <line x1="10" y1="2" x2="10" y2="4" />
+                <line x1="14" y1="2" x2="14" y2="4" />
+              </svg>
+              Buy Us a Coffee
+            </a>
+          </div>
         </div>
       )}
     </header>

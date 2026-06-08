@@ -488,10 +488,10 @@ export default function WatermarkPage() {
           />
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-scale-in" style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: 24 }}>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-scale-in">
           
           {/* Left: Files List Sidebar */}
-          <div className="lg:col-span-3" style={{ ...cardStyle, gridColumn: 'span 3' }}>
+          <div className="col-span-1 lg:col-span-3" style={cardStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, borderBottom: '1px solid #F1F1F7', paddingBottom: 10 }}>
               <span style={{ fontSize: 11, fontWeight: 800, color: '#9898B5', textTransform: 'uppercase' }}>Files ({files.length})</span>
               <button onClick={() => { setFiles([]); setSelectedFile(null); }} style={{ fontSize: 10, fontWeight: 700, color: '#EF4444', border: 'none', background: 'none', cursor: 'pointer' }}>Clear All</button>
@@ -546,7 +546,7 @@ export default function WatermarkPage() {
           </div>
 
           {/* Middle: Canvas Preview (Single/Bulk Grid switcher) */}
-          <div className="lg:col-span-5" style={{ ...cardStyle, padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', gridColumn: 'span 5' }}>
+          <div className="col-span-1 lg:col-span-5" style={{ ...cardStyle, padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid #E4E4EF' }}>
               <h3 style={{ fontSize: 13, fontWeight: 700, color: '#111128', margin: 0 }}>Watermark Preview</h3>
               <div style={{ display: 'flex', gap: 2, background: '#F1F1F7', borderRadius: 8, padding: 2 }}>
@@ -667,7 +667,7 @@ export default function WatermarkPage() {
           </div>
 
           {/* Right: Controls Panel */}
-          <div className="lg:col-span-4" style={{ display: 'flex', flexDirection: 'column', gap: 16, gridColumn: 'span 4' }}>
+          <div className="col-span-1 lg:col-span-4" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             
             {/* Watermark Type Selector */}
             <div style={cardStyle}>

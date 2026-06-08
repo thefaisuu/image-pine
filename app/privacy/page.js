@@ -141,7 +141,7 @@ export default function PrivacyPage() {
           <div>
             <h2 style={h2Style}>6. Contact Information</h2>
             <p style={{ ...pStyle, marginTop: 12 }}>
-              If you have any questions about this Privacy Policy or browser-local processing, please contact us at: <a href="mailto:privacy@imagepine.com" style={{ color: '#5B5BD6', fontWeight: 600, textDecoration: 'none' }}>privacy@imagepine.com</a>.
+              If you have any questions about this Privacy Policy or browser-local processing, please contact us at: <a href="mailto:helloimagepine@gmail.com" style={{ color: '#5B5BD6', fontWeight: 600, textDecoration: 'none' }}>helloimagepine@gmail.com</a>.
             </p>
           </div>
 

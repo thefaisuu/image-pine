@@ -47,7 +47,7 @@ export default function Footer() {
           </div>
 
           {/* Link Columns */}
-          {[columns.imageTools, columns.studioTools, columns.convert, columns.pdfTools, columns.about].map((col, i) => (
+          {[columns.imageTools, columns.studioTools, columns.convert, columns.pdfTools].map((col, i) => (
             <div key={i}>
               <h4 style={{
                 fontSize: 10, fontWeight: 800, color: '#9898B5',
@@ -91,12 +91,14 @@ export default function Footer() {
           flexWrap: 'wrap',
           gap: 10,
         }}>
-          <p style={{ fontSize: 11, color: '#9898B5', fontWeight: 500 }}>
+          <p style={{ fontSize: 11, color: '#9898B5', fontWeight: 500, margin: 0 }}>
             © {new Date().getFullYear()} ImagePine. All rights reserved.
           </p>
-          <p style={{ fontSize: 11, color: '#9898B5', fontWeight: 500 }}>
-            All processing is local - your images never leave your device.
-          </p>
+          <div style={{ display: 'flex', gap: 16 }}>
+            <a href="/contact" style={{ fontSize: 11, color: '#9898B5', fontWeight: 500, textDecoration: 'none', transition: 'color 0.15s' }} className="hover:text-[#111128]">Contact Us</a>
+            <a href="/privacy" style={{ fontSize: 11, color: '#9898B5', fontWeight: 500, textDecoration: 'none', transition: 'color 0.15s' }} className="hover:text-[#111128]">Privacy Policy</a>
+            <a href="/terms" style={{ fontSize: 11, color: '#9898B5', fontWeight: 500, textDecoration: 'none', transition: 'color 0.15s' }} className="hover:text-[#111128]">Terms of Service</a>
+          </div>
         </div>
       </div>
     </footer>
