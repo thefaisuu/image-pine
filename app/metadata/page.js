@@ -310,9 +310,19 @@ export default function MetadataPage() {
 
   const handleFileSelect = (newFiles) => {
     if (newFiles && newFiles.length > 0) {
-      setFiles(prev => [...prev, ...newFiles]);
-      if (!selectedFile) setSelectedFile(newFiles[0]);
-      newFiles.forEach(f => {
+      const sanitized = newFiles.map(f => {
+        if (!f.preview) {
+          try {
+            f.preview = URL.createObjectURL(f);
+          } catch (e) {
+            console.error('Failed to create object URL:', e);
+          }
+        }
+        return f;
+      });
+      setFiles(prev => [...prev, ...sanitized]);
+      if (!selectedFile) setSelectedFile(sanitized[0]);
+      sanitized.forEach(f => {
         parseFileMetadata(f);
       });
     }
@@ -1204,7 +1214,7 @@ export default function MetadataPage() {
                 Losslessly strip camera profiles, device identifiers, GPS coordinates, XMP edits, and user comments.
               </p>
 
-              {isProcessing && files.length > 1 && (
+              {isStripping && files.length > 1 && (
                 <div style={{ fontSize: 11, color: '#5B5BD6', fontWeight: 700, marginBottom: 8, textAlign: 'center' }}>
                   Processing: {processedCount} of {files.length} images...
                 </div>
@@ -1294,7 +1304,7 @@ export default function MetadataPage() {
                 <div style={{ width: '100%', borderRadius: 10, overflow: 'hidden', border: '1px solid #E4E4EF' }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={selectedFile.preview || URL.createObjectURL(selectedFile)}
+                    src={selectedFile.preview || ''}
                     alt=""
                     style={{ width: '100%', height: 'auto', maxHeight: 220, objectFit: 'contain', display: 'block', background: 'repeating-conic-gradient(#F1F1F7 0% 25%, #fff 0% 50%) 0 0 / 16px 16px' }}
                   />
