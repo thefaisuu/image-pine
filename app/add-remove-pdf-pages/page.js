@@ -30,7 +30,8 @@ const _FAQS = [
 
 export default function AddRemovePdfPagesPage() {
   const [pages, setPages] = useState([]); // Array of page objects
-  const [sourceFiles, setSourceFiles] = useState({}); // fileId -> { name, buffer, type }
+  const sourceFilesRef = useRef({}); // fileId -> { name, buffer, type }
+  const [totalSize, setTotalSize] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -144,7 +145,7 @@ export default function AddRemovePdfPagesPage() {
     try {
       const pdfjs = await loadPdfJs();
       const newPages = [];
-      const updatedSourceFiles = { ...sourceFiles };
+      let addedSize = 0;
 
       for (const file of fileList) {
         setProgress(`Loading ${file.name}...`);
@@ -158,7 +159,8 @@ export default function AddRemovePdfPagesPage() {
             reader.readAsArrayBuffer(file);
           });
 
-          updatedSourceFiles[fileId] = { name: file.name, buffer, type: 'pdf' };
+          sourceFilesRef.current[fileId] = { name: file.name, buffer, type: 'pdf' };
+          addedSize += buffer.byteLength;
 
           const loadingTask = pdfjs.getDocument({ data: buffer });
           const pdfDoc = await loadingTask.promise;
@@ -203,7 +205,8 @@ export default function AddRemovePdfPagesPage() {
           try {
             setProgress(`Converting ${file.name}...`);
             const converted = await convertImageToJpgBuffer(file);
-            updatedSourceFiles[fileId] = { name: file.name, buffer: converted.buffer, type: 'image' };
+            sourceFilesRef.current[fileId] = { name: file.name, buffer: converted.buffer, type: 'image' };
+            addedSize += converted.buffer.byteLength;
 
             newPages.push({
               id: Math.random().toString(36).slice(2, 9),
@@ -221,8 +224,8 @@ export default function AddRemovePdfPagesPage() {
         }
       }
 
-      setSourceFiles(updatedSourceFiles);
       setPages(prev => [...prev, ...newPages]);
+      setTotalSize(prev => prev + addedSize);
       setIsProcessing(false);
       setProgress('');
     } catch (err) {
@@ -289,7 +292,8 @@ export default function AddRemovePdfPagesPage() {
     });
     createdUrlsRef.current = [];
     setPages([]);
-    setSourceFiles({});
+    sourceFilesRef.current = {};
+    setTotalSize(0);
     setErrorMsg('');
     setProgress('');
   };
@@ -316,7 +320,7 @@ export default function AddRemovePdfPagesPage() {
         let targetPage;
 
         if (page.type === 'pdf') {
-          const fileData = sourceFiles[page.fileId];
+          const fileData = sourceFilesRef.current[page.fileId];
           if (!fileData) throw new Error(`Missing source file for page ${idx + 1}`);
 
           let srcDoc = pdfCache[page.fileId];
@@ -334,7 +338,7 @@ export default function AddRemovePdfPagesPage() {
           }
 
         } else if (page.type === 'image') {
-          const fileData = sourceFiles[page.fileId];
+          const fileData = sourceFilesRef.current[page.fileId];
           if (!fileData) throw new Error(`Missing source image for page ${idx + 1}`);
 
           const embeddedImage = await pdfDoc.embedJpg(fileData.buffer);
@@ -386,7 +390,7 @@ export default function AddRemovePdfPagesPage() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
-  const totalFilesSize = Object.values(sourceFiles).reduce((acc, f) => acc + (f.buffer?.byteLength || 0), 0);
+  const totalFilesSize = totalSize;
 
   return (
     <ToolPageShell
