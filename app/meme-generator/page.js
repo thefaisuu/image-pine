@@ -28,6 +28,139 @@ const _FAQS = [
   { q: 'Does it work with transparent PNG files?', a: 'Yes. PNG transparency is preserved in the final generated meme.' }
 ];
 
+const CUSTOM_BOX_COORDINATES = {
+  // Drake Hotline Bling
+  'imgflip_181913649': [
+    { x: 0.72, y: 0.25, text: 'TOP CAPTION' },
+    { x: 0.72, y: 0.75, text: 'BOTTOM CAPTION' }
+  ],
+  'memegen_drake': [
+    { x: 0.72, y: 0.25, text: 'TOP CAPTION' },
+    { x: 0.72, y: 0.75, text: 'BOTTOM CAPTION' }
+  ],
+  
+  // Distracted Boyfriend
+  'imgflip_112126428': [
+    { x: 0.21, y: 0.70, text: 'OTHER GIRL' },
+    { x: 0.52, y: 0.60, text: 'BOYFRIEND' },
+    { x: 0.78, y: 0.65, text: 'GIRLFRIEND' }
+  ],
+  'memegen_disaster': [
+    { x: 0.21, y: 0.70, text: 'OTHER GIRL' },
+    { x: 0.52, y: 0.60, text: 'BOYFRIEND' },
+    { x: 0.78, y: 0.65, text: 'GIRLFRIEND' }
+  ],
+  
+  // Three-Headed Dragon
+  'imgflip_222401278': [
+    { x: 0.22, y: 0.35, text: 'SERIOUS HEAD 1' },
+    { x: 0.53, y: 0.32, text: 'SERIOUS HEAD 2' },
+    { x: 0.83, y: 0.40, text: 'GOOFY HEAD' }
+  ],
+  'memegen_3hd': [
+    { x: 0.22, y: 0.35, text: 'SERIOUS HEAD 1' },
+    { x: 0.53, y: 0.32, text: 'SERIOUS HEAD 2' },
+    { x: 0.83, y: 0.40, text: 'GOOFY HEAD' }
+  ],
+
+  // Two Buttons / Daily Struggle
+  'imgflip_87743020': [
+    { x: 0.28, y: 0.25, text: 'BUTTON 1' },
+    { x: 0.57, y: 0.20, text: 'BUTTON 2' },
+    { x: 0.50, y: 0.85, text: 'GUY DECIDING' }
+  ],
+  
+  // Left Exit 12 Off Ramp
+  'imgflip_124855084': [
+    { x: 0.35, y: 0.35, text: 'STRAIGHT SIGN' },
+    { x: 0.72, y: 0.35, text: 'EXIT SIGN' },
+    { x: 0.45, y: 0.82, text: 'CAR VEERING' }
+  ],
+  
+  // Batman Slapping Robin
+  'imgflip_438680': [
+    { x: 0.35, y: 0.60, text: 'ROBIN' },
+    { x: 0.75, y: 0.55, text: 'BATMAN' }
+  ],
+  'memegen_batman-slap': [
+    { x: 0.35, y: 0.60, text: 'ROBIN' },
+    { x: 0.75, y: 0.55, text: 'BATMAN' }
+  ],
+  
+  // Expanding Brain
+  'imgflip_93895088': [
+    { x: 0.25, y: 0.12, text: 'BRAIN STAGE 1' },
+    { x: 0.25, y: 0.37, text: 'BRAIN STAGE 2' },
+    { x: 0.25, y: 0.62, text: 'BRAIN STAGE 3' },
+    { x: 0.25, y: 0.87, text: 'BRAIN STAGE 4' }
+  ],
+  'memegen_expanding-brain': [
+    { x: 0.25, y: 0.12, text: 'BRAIN STAGE 1' },
+    { x: 0.25, y: 0.37, text: 'BRAIN STAGE 2' },
+    { x: 0.25, y: 0.62, text: 'BRAIN STAGE 3' },
+    { x: 0.25, y: 0.87, text: 'BRAIN STAGE 4' }
+  ],
+  
+  // Tuxedo Winnie the Pooh
+  'imgflip_178591752': [
+    { x: 0.35, y: 0.25, text: 'NORMAL POOH' },
+    { x: 0.35, y: 0.75, text: 'FANCY POOH' }
+  ],
+  'memegen_tuxedo-pooh': [
+    { x: 0.35, y: 0.25, text: 'NORMAL POOH' },
+    { x: 0.35, y: 0.75, text: 'FANCY POOH' }
+  ],
+  
+  // Always Has Been
+  'imgflip_252605381': [
+    { x: 0.22, y: 0.35, text: 'ASTRONAUT 1' },
+    { x: 0.78, y: 0.25, text: 'ASTRONAUT 2' },
+    { x: 0.50, y: 0.88, text: 'ALWAYS HAS BEEN' }
+  ],
+  'memegen_always-has-been': [
+    { x: 0.22, y: 0.35, text: 'ASTRONAUT 1' },
+    { x: 0.78, y: 0.25, text: 'ASTRONAUT 2' },
+    { x: 0.50, y: 0.88, text: 'ALWAYS HAS BEEN' }
+  ]
+};
+
+const getInitialCoordinatesForTemplate = (template) => {
+  const customCoords = CUSTOM_BOX_COORDINATES[template.id];
+  if (customCoords) return customCoords;
+
+  const nameLower = template.name.toLowerCase();
+  
+  if (nameLower.includes('drake')) {
+    return CUSTOM_BOX_COORDINATES['memegen_drake'];
+  }
+  if (nameLower.includes('distracted') && nameLower.includes('boyfriend')) {
+    return CUSTOM_BOX_COORDINATES['memegen_disaster'];
+  }
+  if (nameLower.includes('dragon') && nameLower.includes('three')) {
+    return CUSTOM_BOX_COORDINATES['memegen_3hd'];
+  }
+  if (nameLower.includes('daily struggle') || nameLower.includes('two buttons')) {
+    return CUSTOM_BOX_COORDINATES['imgflip_87743020'];
+  }
+  if (nameLower.includes('off ramp') || nameLower.includes('exit sign')) {
+    return CUSTOM_BOX_COORDINATES['imgflip_124855084'];
+  }
+  if (nameLower.includes('batman slap')) {
+    return CUSTOM_BOX_COORDINATES['memegen_batman-slap'];
+  }
+  if (nameLower.includes('expanding brain')) {
+    return CUSTOM_BOX_COORDINATES['memegen_expanding-brain'];
+  }
+  if (nameLower.includes('winnie') || nameLower.includes('pooh')) {
+    return CUSTOM_BOX_COORDINATES['memegen_tuxedo-pooh'];
+  }
+  if (nameLower.includes('always has been')) {
+    return CUSTOM_BOX_COORDINATES['memegen_always-has-been'];
+  }
+  
+  return null;
+};
+
 export default function MemeGeneratorPage() {
   const [file, setFile] = useState(null);
   const [strokeWidth, setStrokeWidth] = useState(6);
@@ -192,19 +325,31 @@ export default function MemeGeneratorPage() {
       isTemplate: true
     });
 
-    // Auto-generate the correct number of boxes based on box_count
-    const boxCount = template.box_count || 2;
-    const initialTexts = Array.from({ length: boxCount }).map((_, i) => {
-      const y = boxCount === 1 ? 0.5 : 0.12 + (i * (0.85 - 0.12) / (boxCount - 1));
-      return {
+    const customCoords = getInitialCoordinatesForTemplate(template);
+    if (customCoords) {
+      const initialTexts = customCoords.map((coord, i) => ({
         id: String(i + 1),
-        text: `TEXT BLOCK ${i + 1}`,
+        text: coord.text,
         fontSize: 44,
-        x: 0.5,
-        y: y
-      };
-    });
-    setTexts(initialTexts);
+        x: coord.x,
+        y: coord.y
+      }));
+      setTexts(initialTexts);
+    } else {
+      // Auto-generate the correct number of boxes based on box_count (fallback vertical distribution)
+      const boxCount = template.box_count || 2;
+      const initialTexts = Array.from({ length: boxCount }).map((_, i) => {
+        const y = boxCount === 1 ? 0.5 : 0.12 + (i * (0.85 - 0.12) / (boxCount - 1));
+        return {
+          id: String(i + 1),
+          text: `TEXT BLOCK ${i + 1}`,
+          fontSize: 44,
+          x: 0.5,
+          y: y
+        };
+      });
+      setTexts(initialTexts);
+    }
     setErrorMsg('');
 
     // Smooth scroll to the editing area so the user doesn't have to scroll up manually
