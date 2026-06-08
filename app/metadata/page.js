@@ -319,17 +319,27 @@ export default function MetadataPage() {
   };
 
   const parseFileMetadata = (fileObj) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const buffer = e.target.result;
-        const tags = readExifTags(buffer);
-        setMetadataMap(prev => ({ ...prev, [fileObj.id]: tags }));
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    reader.readAsArrayBuffer(fileObj);
+    try {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const buffer = e.target.result;
+          const tags = readExifTags(buffer);
+          setMetadataMap(prev => ({ ...prev, [fileObj.id]: tags }));
+        } catch (err) {
+          console.error('Error processing parsed EXIF buffer:', err);
+          setMetadataMap(prev => ({ ...prev, [fileObj.id]: { _error: err.message || 'Error parsing buffer' } }));
+        }
+      };
+      reader.onerror = (err) => {
+        console.error('FileReader error:', err);
+        setMetadataMap(prev => ({ ...prev, [fileObj.id]: { _error: 'Failed to read file.' } }));
+      };
+      reader.readAsArrayBuffer(fileObj);
+    } catch (err) {
+      console.error('Failed to start file reader:', err);
+      setMetadataMap(prev => ({ ...prev, [fileObj.id]: { _error: err.message || 'FileReader initialization failed' } }));
+    }
   };
 
   const removeFile = (id, e) => {
@@ -447,9 +457,6 @@ export default function MetadataPage() {
 
   // Binary EXIF and metadata scanner (JPEG and PNG)
   const readExifTags = (buffer) => {
-    const view = new DataView(buffer);
-    if (view.byteLength < 4) return null;
-
     const detectedSegments = {
       exif: false,
       xmp: false,
@@ -465,160 +472,173 @@ export default function MetadataPage() {
       allTags: []
     };
 
-    // Check if PNG
-    const isPng = view.byteLength >= 8 &&
-                  view.getUint32(0, false) === 0x89504E47 &&
-                  view.getUint32(4, false) === 0x0D0A1A0A;
-
-    if (isPng) {
-      let offset = 8;
-      const length = view.byteLength;
-      const decoder = new TextDecoder('utf-8');
-
-      while (offset < length) {
-        if (offset + 8 > length) break;
-        const chunkLength = view.getUint32(offset, false);
-        const chunkType = String.fromCharCode(
-          view.getUint8(offset + 4),
-          view.getUint8(offset + 5),
-          view.getUint8(offset + 6),
-          view.getUint8(offset + 7)
-        );
-
-        const totalChunkLength = 12 + chunkLength;
-        if (offset + totalChunkLength > length) break;
-
-        if (chunkType === 'eXIf') {
-          detectedSegments.exif = true;
-          const exifDataView = new DataView(buffer, offset + 8, chunkLength);
-          parseExifDataView(exifDataView, tags);
-        } else if (chunkType === 'iCCP') {
-          detectedSegments.icc = true;
-        } else if (['tEXt', 'zTXt', 'iTXt'].includes(chunkType)) {
-          detectedSegments.comments = true;
-          try {
-            const dataBytes = new Uint8Array(buffer, offset + 8, chunkLength);
-            let nullIdx = -1;
-            for (let j = 0; j < dataBytes.length; j++) {
-              if (dataBytes[j] === 0) {
-                nullIdx = j;
-                break;
-              }
-            }
-            if (nullIdx !== -1) {
-              const key = decoder.decode(dataBytes.slice(0, nullIdx)).trim();
-              let val = '';
-              if (chunkType === 'tEXt') {
-                val = decoder.decode(dataBytes.slice(nullIdx + 1)).trim();
-              } else if (chunkType === 'iTXt') {
-                let scanIdx = nullIdx + 3; // skip compression flag/method
-                while (scanIdx < dataBytes.length && dataBytes[scanIdx] !== 0) scanIdx++;
-                scanIdx++;
-                while (scanIdx < dataBytes.length && dataBytes[scanIdx] !== 0) scanIdx++;
-                scanIdx++;
-                val = decoder.decode(dataBytes.slice(scanIdx)).trim();
-              } else if (chunkType === 'zTXt') {
-                val = '[Compressed Metadata Text]';
-              }
-
-              if (key && val) {
-                tags.allTags.push({
-                  tag: 0,
-                  hex: '0x0000',
-                  group: 'PNG Text',
-                  name: key,
-                  desc: 'Text metadata chunk',
-                  raw: val,
-                  formatted: val
-                });
-                
-                const lowerKey = key.toLowerCase();
-                if (lowerKey === 'author' || lowerKey === 'artist') tags.artist = val;
-                else if (lowerKey === 'description' || lowerKey === 'title') tags.description = val;
-                else if (lowerKey === 'creation time' || lowerKey === 'date') tags.dateTime = val;
-                else if (lowerKey === 'software') tags.software = val;
-              }
-            }
-          } catch (e) {
-            console.error('Error decoding PNG text chunk', e);
-          }
-        }
-
-        offset += totalChunkLength;
-        if (chunkType === 'IEND') break;
-      }
-      return tags;
-    }
-
-    // Check SOI marker for JPEG
-    if (view.getUint16(0, false) !== 0xFFD8) {
-      return { _error: 'Not a valid JPEG or PNG image' };
-    }
-
-    let offset = 2;
-    const length = view.byteLength;
-    let exifDataView = null;
-
     try {
-      while (offset < length - 2) {
-        const marker = view.getUint16(offset, false);
-        if ((marker & 0xFF00) === 0xFF00) {
-          if (marker === 0xFFDA) { // SOS - Pixel data start
-            break;
+      if (!buffer) return { ...tags, _error: 'No file data received' };
+      const view = new DataView(buffer);
+      if (view.byteLength < 4) return { ...tags, _error: 'Image file is too small to contain metadata' };
+
+      // Check if PNG
+      const isPng = view.byteLength >= 8 &&
+                    view.getUint32(0, false) === 0x89504E47 &&
+                    view.getUint32(4, false) === 0x0D0A1A0A;
+
+      if (isPng) {
+        let offset = 8;
+        const length = view.byteLength;
+        const decoder = new TextDecoder('utf-8');
+
+        while (offset < length) {
+          if (offset + 8 > length) break;
+          const chunkLength = view.getUint32(offset, false);
+          const chunkType = String.fromCharCode(
+            view.getUint8(offset + 4),
+            view.getUint8(offset + 5),
+            view.getUint8(offset + 6),
+            view.getUint8(offset + 7)
+          );
+
+          const totalChunkLength = 12 + chunkLength;
+          if (offset + totalChunkLength > length) break;
+
+          if (chunkType === 'eXIf') {
+            detectedSegments.exif = true;
+            try {
+              const exifDataView = new DataView(buffer, offset + 8, chunkLength);
+              parseExifDataView(exifDataView, tags);
+            } catch (err) {
+              console.error('Error parsing PNG eXIf chunk:', err);
+            }
+          } else if (chunkType === 'iCCP') {
+            detectedSegments.icc = true;
+          } else if (['tEXt', 'zTXt', 'iTXt'].includes(chunkType)) {
+            detectedSegments.comments = true;
+            try {
+              const dataBytes = new Uint8Array(buffer, offset + 8, chunkLength);
+              let nullIdx = -1;
+              for (let j = 0; j < dataBytes.length; j++) {
+                if (dataBytes[j] === 0) {
+                  nullIdx = j;
+                  break;
+                }
+              }
+              if (nullIdx !== -1) {
+                const key = decoder.decode(dataBytes.slice(0, nullIdx)).trim();
+                let val = '';
+                if (chunkType === 'tEXt') {
+                  val = decoder.decode(dataBytes.slice(nullIdx + 1)).trim();
+                } else if (chunkType === 'iTXt') {
+                  let scanIdx = nullIdx + 3; // skip compression flag/method
+                  while (scanIdx < dataBytes.length && dataBytes[scanIdx] !== 0) scanIdx++;
+                  scanIdx++;
+                  while (scanIdx < dataBytes.length && dataBytes[scanIdx] !== 0) scanIdx++;
+                  scanIdx++;
+                  val = decoder.decode(dataBytes.slice(scanIdx)).trim();
+                } else if (chunkType === 'zTXt') {
+                  val = '[Compressed Metadata Text]';
+                }
+
+                if (key && val) {
+                  tags.allTags.push({
+                    tag: 0,
+                    hex: '0x0000',
+                    group: 'PNG Text',
+                    name: key,
+                    desc: 'Text metadata chunk',
+                    raw: val,
+                    formatted: val
+                  });
+                  
+                  const lowerKey = key.toLowerCase();
+                  if (lowerKey === 'author' || lowerKey === 'artist') tags.artist = val;
+                  else if (lowerKey === 'description' || lowerKey === 'title') tags.description = val;
+                  else if (lowerKey === 'creation time' || lowerKey === 'date') tags.dateTime = val;
+                  else if (lowerKey === 'software') tags.software = val;
+                }
+              }
+            } catch (e) {
+              console.error('Error decoding PNG text chunk', e);
+            }
           }
-          const segmentLength = view.getUint16(offset + 2, false);
-          
-          if (marker === 0xFFE1) {
-            // APP1: EXIF or XMP
-            if (offset + 10 < length) {
-              const header = view.getUint32(offset + 4, false);
-              if (header === 0x45786966) { // "Exif"
-                detectedSegments.exif = true;
-                const exifStart = offset + 10;
-                exifDataView = new DataView(buffer, exifStart, segmentLength - 8);
-              } else {
-                // Check if XMP
-                let isXmp = true;
-                const xmpString = "http://ns.adobe.com/xap/1.0/";
-                for (let j = 0; j < 20; j++) {
-                  if (view.getUint8(offset + 4 + j) !== xmpString.charCodeAt(j)) {
-                    isXmp = false;
-                    break;
+
+          offset += totalChunkLength;
+          if (chunkType === 'IEND') break;
+        }
+        return tags;
+      }
+
+      // Check SOI marker for JPEG
+      if (view.getUint16(0, false) !== 0xFFD8) {
+        return { ...tags, _error: 'Not a valid JPEG or PNG image' };
+      }
+
+      let offset = 2;
+      const length = view.byteLength;
+      let exifDataView = null;
+
+      try {
+        while (offset < length - 2) {
+          const marker = view.getUint16(offset, false);
+          if ((marker & 0xFF00) === 0xFF00) {
+            if (marker === 0xFFDA) { // SOS - Pixel data start
+              break;
+            }
+            const segmentLength = view.getUint16(offset + 2, false);
+            
+            if (marker === 0xFFE1) {
+              // APP1: EXIF or XMP
+              if (offset + 10 < length) {
+                const header = view.getUint32(offset + 4, false);
+                if (header === 0x45786966) { // "Exif"
+                  detectedSegments.exif = true;
+                  const exifStart = offset + 10;
+                  exifDataView = new DataView(buffer, exifStart, segmentLength - 8);
+                } else {
+                  // Check if XMP
+                  let isXmp = true;
+                  const xmpString = "http://ns.adobe.com/xap/1.0/";
+                  for (let j = 0; j < 20; j++) {
+                    if (view.getUint8(offset + 4 + j) !== xmpString.charCodeAt(j)) {
+                      isXmp = false;
+                      break;
+                    }
+                  }
+                  if (isXmp) {
+                    detectedSegments.xmp = true;
                   }
                 }
-                if (isXmp) {
-                  detectedSegments.xmp = true;
-                }
               }
+            } else if (marker === 0xFFED) {
+              detectedSegments.iptc = true; // IPTC / Photoshop IRB
+            } else if (marker === 0xFFFE) {
+              detectedSegments.comments = true; // Comment
+            } else if (marker === 0xFFE2) {
+              detectedSegments.icc = true; // ICC Profile
+            } else if (marker >= 0xFFE3 && marker <= 0xFFEF) {
+              detectedSegments.otherApp.push(`APP${marker - 0xFFE0}`);
             }
-          } else if (marker === 0xFFED) {
-            detectedSegments.iptc = true; // IPTC / Photoshop IRB
-          } else if (marker === 0xFFFE) {
-            detectedSegments.comments = true; // Comment
-          } else if (marker === 0xFFE2) {
-            detectedSegments.icc = true; // ICC Profile
-          } else if (marker >= 0xFFE3 && marker <= 0xFFEF) {
-            detectedSegments.otherApp.push(`APP${marker - 0xFFE0}`);
+            
+            offset += 2 + segmentLength;
+          } else {
+            offset++;
           }
-          
-          offset += 2 + segmentLength;
-        } else {
-          offset++;
+        }
+      } catch (err) {
+        console.warn('Malformed JPEG headers read warning', err);
+      }
+
+      if (exifDataView) {
+        try {
+          parseExifDataView(exifDataView, tags);
+        } catch (err) {
+          console.error('Error parsing EXIF DataView', err);
         }
       }
+
+      return tags;
     } catch (err) {
-      console.warn('Malformed JPEG headers read warning', err);
+      console.error('Uncaught exception in readExifTags:', err);
+      return { ...tags, _error: 'Failed to read image headers: ' + (err.message || String(err)) };
     }
-
-    if (exifDataView) {
-      try {
-        parseExifDataView(exifDataView, tags);
-      } catch (err) {
-        console.error('Error parsing EXIF DataView', err);
-      }
-    }
-
-    return tags;
   };
 
   const readFileAsArrayBuffer = (fileObj) => {
@@ -1047,37 +1067,37 @@ export default function MetadataPage() {
                             {currentMetadata.make && (
                               <div style={{ padding: 10, background: '#F7F7FB', borderRadius: 10, border: '1px solid #E4E4EF' }}>
                                 <span style={{ fontSize: 9, fontWeight: 700, color: '#9898B5', display: 'block', textTransform: 'uppercase' }}>Manufacturer</span>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#111128' }}>{currentMetadata.make}</span>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: '#111128' }}>{String(currentMetadata.make)}</span>
                               </div>
                             )}
                             {currentMetadata.model && (
                               <div style={{ padding: 10, background: '#F7F7FB', borderRadius: 10, border: '1px solid #E4E4EF' }}>
                                 <span style={{ fontSize: 9, fontWeight: 700, color: '#9898B5', display: 'block', textTransform: 'uppercase' }}>Camera Model</span>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#111128' }}>{currentMetadata.model}</span>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: '#111128' }}>{String(currentMetadata.model)}</span>
                               </div>
                             )}
                             {currentMetadata.dateTime && (
                               <div style={{ padding: 10, background: '#F7F7FB', borderRadius: 10, border: '1px solid #E4E4EF' }}>
                                 <span style={{ fontSize: 9, fontWeight: 700, color: '#9898B5', display: 'block', textTransform: 'uppercase' }}>Date / Time Created</span>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#111128' }}>{currentMetadata.dateTime}</span>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: '#111128' }}>{String(currentMetadata.dateTime)}</span>
                               </div>
                             )}
                             {currentMetadata.software && (
                               <div style={{ padding: 10, background: '#F7F7FB', borderRadius: 10, border: '1px solid #E4E4EF' }}>
                                 <span style={{ fontSize: 9, fontWeight: 700, color: '#9898B5', display: 'block', textTransform: 'uppercase' }}>Software</span>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#111128' }}>{currentMetadata.software}</span>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: '#111128' }}>{String(currentMetadata.software)}</span>
                               </div>
                             )}
                             {currentMetadata.exposureTime && (
                               <div style={{ padding: 10, background: '#F7F7FB', borderRadius: 10, border: '1px solid #E4E4EF' }}>
                                 <span style={{ fontSize: 9, fontWeight: 700, color: '#9898B5', display: 'block', textTransform: 'uppercase' }}>Shutter Speed</span>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#111128' }}>{currentMetadata.exposureTime}</span>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: '#111128' }}>{String(currentMetadata.exposureTime)}</span>
                               </div>
                             )}
                             {currentMetadata.fNumber && (
                               <div style={{ padding: 10, background: '#F7F7FB', borderRadius: 10, border: '1px solid #E4E4EF' }}>
                                 <span style={{ fontSize: 9, fontWeight: 700, color: '#9898B5', display: 'block', textTransform: 'uppercase' }}>Aperture</span>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#111128' }}>{currentMetadata.fNumber}</span>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: '#111128' }}>{String(currentMetadata.fNumber)}</span>
                               </div>
                             )}
                           </div>
@@ -1094,9 +1114,9 @@ export default function MetadataPage() {
                                 </span>
                                 <div>
                                   <span style={{ fontSize: 10, fontWeight: 850, color: '#B45309', display: 'block', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Sensitive GPS Location</span>
-                                  <span style={{ fontSize: 12, fontWeight: 700, color: '#78350F' }}>{currentMetadata.gpsDms}</span>
+                                  <span style={{ fontSize: 12, fontWeight: 700, color: '#78350F' }}>{String(currentMetadata.gpsDms)}</span>
                                   <p style={{ fontSize: 10, color: '#92400E', margin: '4px 0 0', lineHeight: 1.4 }}>
-                                    Coordinates: <code>{currentMetadata.gps}</code>. This information will be stripped losslessly upon cleaning.
+                                    Coordinates: <code>{String(currentMetadata.gps)}</code>. This information will be stripped losslessly upon cleaning.
                                   </p>
                                 </div>
                               </div>

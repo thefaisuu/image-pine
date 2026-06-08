@@ -24,7 +24,7 @@ export default function UploadBox({
     (acceptedFiles) => {
       const mapped = acceptedFiles.map((file) =>
         Object.assign(file, {
-          preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
+          preview: (file.type && file.type.startsWith('image/')) ? URL.createObjectURL(file) : null,
           id: Math.random().toString(36).slice(2, 9),
         })
       );
