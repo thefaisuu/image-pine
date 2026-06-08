@@ -16,22 +16,23 @@ const _FEATURES = [
 ];
 
 const _STEPS = [
-  { n: '1', title: 'Upload base image', desc: 'Drag & drop your photo or meme template.' },
-  { n: '2', title: 'Add captions', desc: 'Type your top & bottom text, resize or drag them.' },
-  { n: '3', title: 'Generate & Save', desc: 'Download your high-quality meme instantly.' }
+  { n: '1', title: 'Choose base image', desc: 'Select a popular template from our grid or upload your own.' },
+  { n: '2', title: 'Edit captions', desc: 'Type directly in the text boxes on-screen and drag them.' },
+  { n: '3', title: 'Download', desc: 'Generate and download your meme instantly.' }
 ];
 
 const _FAQS = [
-  { q: 'Can I add more than two text blocks?', a: 'Currently, the studio supports Top and Bottom captions. You can drag them anywhere on the image.' },
-  { q: 'Is there a watermark on exported memes?', a: 'No. ImagePine is completely free, open-source, and does not add any watermarks to your creations.' },
-  { q: 'Does it work with PNG transparent templates?', a: 'Yes. PNG transparency is preserved in the final generated meme.' }
+  { q: 'Can I upload my own image?', a: 'Yes! Click "Upload Custom Image" or the first card in the grid to load any local JPEG, PNG, or WebP file.' },
+  { q: 'How do I edit or move the text?', a: 'You can type directly into the text fields overlaid on the image, and drag them anywhere using the circular handle on top of each box.' },
+  { q: 'Is there a watermark on exported memes?', a: 'No. ImagePine is completely free and does not add any watermarks to your creations.' },
+  { q: 'Does it work with transparent PNG files?', a: 'Yes. PNG transparency is preserved in the final generated meme.' }
 ];
 
 export default function MemeGeneratorPage() {
   const [file, setFile] = useState(null);
   const [topText, setTopText] = useState('TOP CAPTION');
   const [bottomText, setBottomText] = useState('BOTTOM CAPTION');
-  const [fontSize, setFontSize] = useState(40); // Base percentage-like size
+  const [fontSize, setFontSize] = useState(40);
   const [strokeWidth, setStrokeWidth] = useState(6);
   const [allCaps, setAllCaps] = useState(true);
   
@@ -40,15 +41,34 @@ export default function MemeGeneratorPage() {
   const [bottomFontSize, setBottomFontSize] = useState(44);
 
   // Dragging states
-  const [topPos, setTopPos] = useState({ x: null, y: null }); // relative (0 to 1)
-  const [bottomPos, setBottomPos] = useState({ x: null, y: null }); // relative (0 to 1)
+  const [topPos, setTopPos] = useState({ x: 0.5, y: 0.12 }); // relative (0 to 1)
+  const [bottomPos, setBottomPos] = useState({ x: 0.5, y: 0.88 }); // relative (0 to 1)
   const [draggingItem, setDraggingItem] = useState(null); // 'top' | 'bottom' | null
+
+  // Templates states
+  const [templates, setTemplates] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
 
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Fetch templates on mount
+  useEffect(() => {
+    setLoadingTemplates(true);
+    fetch('https://api.imgflip.com/get_memes')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setTemplates(data.data.memes);
+        }
+      })
+      .catch(err => console.error('Error fetching templates:', err))
+      .finally(() => setLoadingTemplates(false));
+  }, []);
 
   // Handle file select
   const handleFileSelect = (selectedList) => {
@@ -58,9 +78,22 @@ export default function MemeGeneratorPage() {
       setBottomPos({ x: 0.5, y: 0.88 });
     } else {
       setFile(null);
-      setTopPos({ x: null, y: null });
-      setBottomPos({ x: null, y: null });
+      setTopPos({ x: 0.5, y: 0.12 });
+      setBottomPos({ x: 0.5, y: 0.88 });
     }
+    setErrorMsg('');
+  };
+
+  const selectTemplate = (template) => {
+    setFile({
+      preview: template.url,
+      name: template.name,
+      type: 'image/jpeg',
+      size: 0,
+      isTemplate: true
+    });
+    setTopPos({ x: 0.5, y: 0.12 });
+    setBottomPos({ x: 0.5, y: 0.88 });
     setErrorMsg('');
   };
 
@@ -73,6 +106,7 @@ export default function MemeGeneratorPage() {
     if (!ctx) return;
 
     const img = new Image();
+    img.crossOrigin = 'anonymous'; // Support external template images without tainting canvas
     img.onload = () => {
       const w = img.naturalWidth || img.width;
       const h = img.naturalHeight || img.height;
@@ -136,21 +170,6 @@ export default function MemeGeneratorPage() {
     return { x, y };
   };
 
-  const handleMouseDown = (e) => {
-    if (!file) return;
-    const { x, y } = getCanvasMousePos(e);
-
-    // Calculate distance to topPos and bottomPos
-    const distTop = Math.hypot(x - (topPos.x ?? 0.5), y - (topPos.y ?? 0.15));
-    const distBottom = Math.hypot(x - (bottomPos.x ?? 0.5), y - (bottomPos.y ?? 0.85));
-
-    if (distTop < distBottom && distTop < 0.15) {
-      setDraggingItem('top');
-    } else if (distBottom < 0.15) {
-      setDraggingItem('bottom');
-    }
-  };
-
   const handleMouseMove = (e) => {
     if (!draggingItem || !file) return;
     const { x, y } = getCanvasMousePos(e);
@@ -175,7 +194,7 @@ export default function MemeGeneratorPage() {
     setIsProcessing(true);
     canvasRef.current.toBlob((blob) => {
       if (blob) {
-        const ext = file.name.split('.').pop();
+        const ext = file.isTemplate ? 'jpg' : (file.name.split('.').pop() || 'jpg');
         const baseName = file.name.replace(/\.[^/.]+$/, '');
         const newName = `${baseName}_meme.${ext}`;
         saveAs(blob, newName);
@@ -184,7 +203,7 @@ export default function MemeGeneratorPage() {
         setErrorMsg('Could not export canvas.');
       }
       setIsProcessing(false);
-    }, file.type || 'image/jpeg', 0.95);
+    }, 'image/jpeg', 0.95);
   };
 
   const formatSize = (bytes) => {
@@ -198,20 +217,108 @@ export default function MemeGeneratorPage() {
   return (
     <ToolPageShell
       title="Meme Generator"
-      subtitle="Create custom memes instantly in your browser. Add draggable text, change sizes and download in high quality."
+      subtitle="Create custom memes instantly in your browser. Add draggable text, type directly on the screen, and download in high quality."
       features={_FEATURES}
       steps={_STEPS}
       faqs={_FAQS}
-      seoText="Free browser-based Meme Generator. Add bold text to images, drag captions, customize font size, and export with zero watermarks. Private and fast."
+      seoText="Free browser-based Meme Generator. Add bold text to images, drag captions, edit inline on screen, and export with zero watermarks. Private and fast."
     >
       <div className="flex flex-col gap-6">
         {!file ? (
-          <div style={{ maxWidth: 680, margin: '0 auto', width: '100%' }}>
-            <UploadBox 
-              onFileSelect={handleFileSelect} 
-              acceptedFormats={['.jpg', '.jpeg', '.png', '.webp']}
-              multiple={false} 
-            />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {/* Search and upload bar */}
+            <div style={{ display: 'flex', gap: 16, alignItems: 'center', justifyContent: 'space-between', background: '#fff', border: '1px solid #E4E4EF', borderRadius: 16, padding: '16px 20px', boxShadow: '0 2px 12px rgba(0,0,0,0.04)', flexWrap: 'wrap' }}>
+              <div style={{ position: 'relative', flex: 1, minWidth: 280 }}>
+                <input
+                  type="text"
+                  placeholder="Search popular meme templates..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{
+                    width: '100%', padding: '10px 14px 10px 38px',
+                    background: '#F7F7FB', border: '1px solid #E4E4EF',
+                    borderRadius: 10, fontSize: 13, fontWeight: 600,
+                    outline: 'none', color: '#111128'
+                  }}
+                />
+                <svg style={{ position: 'absolute', left: 12, top: 12, color: '#9898B5' }} width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <button
+                onClick={() => document.querySelector('input[type="file"]')?.click()}
+                style={{
+                  background: 'linear-gradient(135deg, #5B5BD6 0%, #7C3AED 100%)',
+                  color: '#fff', fontWeight: 800, fontSize: 13, padding: '11px 22px',
+                  borderRadius: 10, border: 'none', cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(91,91,214,0.25)', display: 'flex', alignItems: 'center', gap: 6
+                }}
+              >
+                <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                Upload Custom Image
+              </button>
+              <input type="file" accept=".jpg,.jpeg,.png,.webp" style={{ display: 'none' }}
+                onChange={e => {
+                  const files = Array.from(e.target.files || []);
+                  if (files.length > 0) handleFileSelect(files);
+                  e.target.value = '';
+                }}
+              />
+            </div>
+
+            {/* Grid of templates */}
+            {loadingTemplates ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '80px 0' }}>
+                <svg style={{ animation: 'spin 1s linear infinite', width: 28, height: 28, color: '#5B5BD6' }} fill="none" viewBox="0 0 24 24">
+                  <circle style={{ opacity: 0.25 }} cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path style={{ opacity: 0.75 }} fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 16 }}>
+                {/* Upload box card trigger */}
+                <div
+                  onClick={() => document.querySelector('input[type="file"]')?.click()}
+                  style={{
+                    border: '2.5px dashed #D1D1E4', borderRadius: 16, padding: 20,
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    gap: 12, cursor: 'pointer', background: '#fff', minHeight: 200, transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#5B5BD6'; e.currentTarget.style.background = '#EDEDFB'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = '#D1D1E4'; e.currentTarget.style.background = '#fff'; }}
+                >
+                  <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#EDEDFB', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#5B5BD6' }}>
+                    <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: '#5B5BD6', textAlign: 'center' }}>Upload Custom Image</span>
+                </div>
+
+                {/* Templates from Imgflip */}
+                {templates
+                  .filter(m => m.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                  .slice(0, 47)
+                  .map(meme => (
+                    <div
+                      key={meme.id}
+                      onClick={() => selectTemplate(meme)}
+                      style={{
+                        background: '#fff', border: '1px solid #E4E4EF', borderRadius: 16,
+                        padding: 10, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 10,
+                        boxShadow: '0 2px 10px rgba(0,0,0,0.03)', transition: 'all 0.18s'
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = '#5B5BD6'; e.currentTarget.style.transform = 'translateY(-3px)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = '#E4E4EF'; e.currentTarget.style.transform = 'none'; }}
+                    >
+                      <div style={{ width: '100%', height: 140, overflow: 'hidden', borderRadius: 12, background: '#F7F7FB', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <img src={meme.url} alt={meme.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
+                      </div>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: '#111128', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 2px' }} title={meme.name}>
+                        {meme.name}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -239,14 +346,14 @@ export default function MemeGeneratorPage() {
                     {file.name}
                   </p>
                   <p className="text-[10px] text-gray-400 font-medium mt-0.5">
-                    Dimensions: {imageSize.width} × {imageSize.height}
+                    {file.isTemplate ? 'Meme Template' : formatSize(file.size)} · {imageSize.width} × {imageSize.height}
                   </p>
                 </div>
               </div>
 
               <div className="pt-2 border-t border-bordercolor/40">
                 <p className="text-[11px] text-gray-400 font-semibold leading-relaxed">
-                  💡 <strong>Tip:</strong> You can click and drag the text overlays directly on the preview to adjust their positions.
+                  💡 <strong>Tip:</strong> Click directly on the text overlay on screen to edit captions. Use the circular handle (✥) above each text block to drag them around!
                 </p>
               </div>
             </div>
@@ -289,22 +396,158 @@ export default function MemeGeneratorPage() {
                   position: "relative", 
                   overflow: "hidden", 
                   background: "repeating-conic-gradient(#F1F1F7 0% 25%, #fff 0% 50%) 0 0 / 16px 16px",
-                  cursor: draggingItem ? 'grabbing' : 'grab'
+                  cursor: draggingItem ? 'grabbing' : 'auto'
                 }}
               >
-                <canvas
-                  ref={canvasRef}
-                  onMouseDown={handleMouseDown}
-                  onTouchStart={handleMouseDown}
-                  style={{ 
-                    maxHeight: 480, 
-                    maxWidth: "100%", 
-                    objectFit: "contain", 
-                    borderRadius: 8, 
-                    boxShadow: "0 4px 20px rgba(0,0,0,0.08)", 
-                    display: "block" 
-                  }}
-                />
+                <div style={{ position: 'relative', display: 'inline-block' }}>
+                  <canvas
+                    ref={canvasRef}
+                    style={{ 
+                      maxHeight: 480, 
+                      maxWidth: "100%", 
+                      objectFit: "contain", 
+                      borderRadius: 8, 
+                      boxShadow: "0 4px 20px rgba(0,0,0,0.08)", 
+                      display: "block" 
+                    }}
+                  />
+                  {/* Interactive Text Overlay */}
+                  <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+                    
+                    {/* Top Caption Input */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: `${(topPos.x ?? 0.5) * 100}%`,
+                        top: `${(topPos.y ?? 0.15) * 100}%`,
+                        transform: 'translate(-50%, -50%)',
+                        pointerEvents: 'auto',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        zIndex: 10
+                      }}
+                    >
+                      {/* Drag Handle */}
+                      <div
+                        style={{
+                          cursor: 'grab',
+                          background: '#5B5BD6',
+                          color: '#fff',
+                          borderRadius: '50%',
+                          width: 20,
+                          height: 20,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+                          marginBottom: 4,
+                          opacity: 0.9,
+                          transition: 'opacity 0.2s',
+                        }}
+                        onMouseDown={(e) => { e.stopPropagation(); setDraggingItem('top'); }}
+                        onTouchStart={(e) => { e.stopPropagation(); setDraggingItem('top'); }}
+                        onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.9'; }}
+                      >
+                        <svg width="10" height="10" fill="none" stroke="currentColor" strokeWidth="3.5" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
+                        </svg>
+                      </div>
+                      <input
+                        type="text"
+                        value={topText}
+                        onChange={(e) => setTopText(e.target.value)}
+                        style={{
+                          background: 'transparent',
+                          border: '1.5px dashed rgba(255,255,255,0.4)',
+                          outline: 'none',
+                          color: '#ffffff',
+                          fontFamily: 'Impact, Arial Black, sans-serif',
+                          fontSize: `calc(${topFontSize}px * 0.35)`,
+                          textAlign: 'center',
+                          textTransform: allCaps ? 'uppercase' : 'none',
+                          textShadow: '2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 0 2px 0 #000, 0 -2px 0 #000, 2px 0 0 #000, -2px 0 0 #000',
+                          width: 'max-content',
+                          minWidth: '150px',
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          boxSizing: 'border-box',
+                          transition: 'border-color 0.15s'
+                        }}
+                        onFocus={(e) => { e.target.style.borderColor = '#5B5BD6'; }}
+                        onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.4)'; }}
+                      />
+                    </div>
+
+                    {/* Bottom Caption Input */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: `${(bottomPos.x ?? 0.5) * 100}%`,
+                        top: `${(bottomPos.y ?? 0.85) * 100}%`,
+                        transform: 'translate(-50%, -50%)',
+                        pointerEvents: 'auto',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        zIndex: 10
+                      }}
+                    >
+                      {/* Drag Handle */}
+                      <div
+                        style={{
+                          cursor: 'grab',
+                          background: '#5B5BD6',
+                          color: '#fff',
+                          borderRadius: '50%',
+                          width: 20,
+                          height: 20,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+                          marginBottom: 4,
+                          opacity: 0.9,
+                          transition: 'opacity 0.2s',
+                        }}
+                        onMouseDown={(e) => { e.stopPropagation(); setDraggingItem('bottom'); }}
+                        onTouchStart={(e) => { e.stopPropagation(); setDraggingItem('bottom'); }}
+                        onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.9'; }}
+                      >
+                        <svg width="10" height="10" fill="none" stroke="currentColor" strokeWidth="3.5" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
+                        </svg>
+                      </div>
+                      <input
+                        type="text"
+                        value={bottomText}
+                        onChange={(e) => setBottomText(e.target.value)}
+                        style={{
+                          background: 'transparent',
+                          border: '1.5px dashed rgba(255,255,255,0.4)',
+                          outline: 'none',
+                          color: '#ffffff',
+                          fontFamily: 'Impact, Arial Black, sans-serif',
+                          fontSize: `calc(${bottomFontSize}px * 0.35)`,
+                          textAlign: 'center',
+                          textTransform: allCaps ? 'uppercase' : 'none',
+                          textShadow: '2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 0 2px 0 #000, 0 -2px 0 #000, 2px 0 0 #000, -2px 0 0 #000',
+                          width: 'max-content',
+                          minWidth: '150px',
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          boxSizing: 'border-box',
+                          transition: 'border-color 0.15s'
+                        }}
+                        onFocus={(e) => { e.target.style.borderColor = '#5B5BD6'; }}
+                        onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.4)'; }}
+                      />
+                    </div>
+
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -393,7 +636,7 @@ export default function MemeGeneratorPage() {
                   type="button"
                   onClick={downloadMeme}
                   disabled={isProcessing}
-                  style={{ width: "100%", padding: "13px", fontSize: 13, fontWeight: 800, borderRadius: 12, border: "none", cursor: "pointer", background: "linear-gradient(135deg, #5B5BD6 0%, #7C3AED 100%)", color: "#fff", boxShadow: "0 4px 14px rgba(91,91,214,0.30)", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "all 0.18s" }}
+                  style={{ width: "100%", padding: "13px", fontSize: 13, fontWeight: 800, borderRadius: 12, border: "none", cursor: "pointer", background: "linear-gradient(135deg, #5B5BD6 0%, #7C3AED 100%)", color: "#fff", boxShadow: "0 4px 14px rgba(91,91,214,0.30)", display: "flex", alignItems: "center", justifyCenter: "center", gap: 8, transition: "all 0.18s" }}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
