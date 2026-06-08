@@ -347,20 +347,108 @@ export default function MetadataPage() {
     }
   };
 
-  // Binary EXIF and metadata scanner
+  // Parse raw EXIF payload from a DataView
+  const parseExifDataView = (exifDataView, tags) => {
+    let isLittleEndian = true;
+    const tiffHeader = exifDataView.getUint16(0, false);
+    if (tiffHeader === 0x4949) {
+      isLittleEndian = true;
+    } else if (tiffHeader === 0x4D4D) {
+      isLittleEndian = false;
+    } else {
+      return;
+    }
+
+    if (exifDataView.getUint16(2, isLittleEndian) !== 0x002A) {
+      return;
+    }
+
+    const firstIfdOffset = exifDataView.getUint32(4, isLittleEndian);
+    tags.hasExif = true;
+
+    const parsedOffsets = new Set();
+
+    const parseIfd = (ifdOffset, group = 'Image') => {
+      if (ifdOffset >= exifDataView.byteLength || parsedOffsets.has(ifdOffset)) return;
+      parsedOffsets.add(ifdOffset);
+      
+      const numEntries = exifDataView.getUint16(ifdOffset, isLittleEndian);
+      let nextOffset = ifdOffset + 2;
+
+      for (let i = 0; i < numEntries; i++) {
+        if (nextOffset + 12 > exifDataView.byteLength) break;
+        const tag = exifDataView.getUint16(nextOffset, isLittleEndian);
+        const type = exifDataView.getUint16(nextOffset + 2, isLittleEndian);
+        const count = exifDataView.getUint32(nextOffset + 4, isLittleEndian);
+        const valOffset = exifDataView.getUint32(nextOffset + 8, isLittleEndian);
+
+        const value = readTagValue(exifDataView, nextOffset, valOffset, type, count, isLittleEndian);
+        
+        if (value !== null && value !== undefined) {
+          if (tag === 0x8825) { // GPS Info IFD Pointer
+            parseIfd(valOffset, 'GPS');
+          } else if (tag === 0x8769) { // Exif SubIFD Pointer
+            parseIfd(valOffset, 'Camera');
+          } else {
+            const info = TAG_NAMES[tag] || { name: `Tag_0x${tag.toString(16).toUpperCase()}`, desc: 'Vendor specific field' };
+            const formatted = formatTagValue(tag, value);
+            
+            tags.allTags.push({
+              tag,
+              hex: `0x${tag.toString(16).toUpperCase().padStart(4, '0')}`,
+              group,
+              name: info.name,
+              desc: info.desc,
+              raw: value,
+              formatted
+            });
+
+            if (tag === 0x010F) tags.make = value;
+            else if (tag === 0x0110) tags.model = value;
+            else if (tag === 0x0132) tags.dateTime = value;
+            else if (tag === 0x013B) tags.artist = value;
+            else if (tag === 0x010E) tags.description = value;
+            else if (tag === 0x0131) tags.software = value;
+            else if (tag === 0x829D) tags.fNumber = formatted;
+            else if (tag === 0x829A) tags.exposureTime = formatted;
+            else if (tag === 0x8827) tags.iso = value;
+            else if (tag === 0x920A) tags.focalLength = formatted;
+          }
+        }
+        nextOffset += 12;
+      }
+    };
+
+    parseIfd(firstIfdOffset);
+
+    const latTag = tags.allTags.find(t => t.tag === 0x0002);
+    const latRefTag = tags.allTags.find(t => t.tag === 0x0001);
+    const lonTag = tags.allTags.find(t => t.tag === 0x0004);
+    const lonRefTag = tags.allTags.find(t => t.tag === 0x0003);
+
+    if (latTag && latRefTag && lonTag && lonRefTag) {
+      const latVals = latTag.raw;
+      const latRef = latRefTag.raw;
+      const lonVals = lonTag.raw;
+      const lonRef = lonRefTag.raw;
+
+      if (Array.isArray(latVals) && latVals.length === 3 && Array.isArray(lonVals) && lonVals.length === 3) {
+        const latDeg = latVals[0], latMin = latVals[1], latSec = latVals[2];
+        const lonDeg = lonVals[0], lonMin = lonVals[1], lonSec = lonVals[2];
+
+        const decimalLat = (latDeg + latMin / 60 + latSec / 3600) * (latRef === 'S' ? -1 : 1);
+        const decimalLon = (lonDeg + lonMin / 60 + lonSec / 3600) * (lonRef === 'W' ? -1 : 1);
+
+        tags.gps = `${decimalLat.toFixed(6)}, ${decimalLon.toFixed(6)}`;
+        tags.gpsDms = `${latDeg}°${latMin}'${latSec.toFixed(1)}"${latRef}, ${lonDeg}°${lonMin}'${lonSec.toFixed(1)}"${lonRef}`;
+      }
+    }
+  };
+
+  // Binary EXIF and metadata scanner (JPEG and PNG)
   const readExifTags = (buffer) => {
     const view = new DataView(buffer);
     if (view.byteLength < 4) return null;
-    
-    // Check SOI marker
-    if (view.getUint16(0, false) !== 0xFFD8) {
-      return { _error: 'Not a valid JPEG image' };
-    }
-
-    let offset = 2;
-    const length = view.byteLength;
-    let exifDataView = null;
-    let isLittleEndian = true;
 
     const detectedSegments = {
       exif: false,
@@ -371,152 +459,162 @@ export default function MetadataPage() {
       otherApp: []
     };
 
-    while (offset < length - 2) {
-      const marker = view.getUint16(offset, false);
-      if ((marker & 0xFF00) === 0xFF00) {
-        if (marker === 0xFFDA) { // SOS - Pixel data start
-          break;
-        }
-        const segmentLength = view.getUint16(offset + 2, false);
-        
-        if (marker === 0xFFE1) {
-          // APP1: EXIF or XMP
-          if (offset + 10 < length) {
-            const header = view.getUint32(offset + 4, false);
-            if (header === 0x45786966) { // "Exif"
-              detectedSegments.exif = true;
-              const exifStart = offset + 10;
-              exifDataView = new DataView(buffer, exifStart, segmentLength - 8);
-            } else {
-              // Check if XMP
-              let isXmp = true;
-              const xmpString = "http://ns.adobe.com/xap/1.0/";
-              for (let j = 0; j < 20; j++) {
-                if (view.getUint8(offset + 4 + j) !== xmpString.charCodeAt(j)) {
-                  isXmp = false;
-                  break;
-                }
-              }
-              if (isXmp) {
-                detectedSegments.xmp = true;
-              }
-            }
-          }
-        } else if (marker === 0xFFED) {
-          detectedSegments.iptc = true; // IPTC / Photoshop IRB
-        } else if (marker === 0xFFFE) {
-          detectedSegments.comments = true; // Comment
-        } else if (marker === 0xFFE2) {
-          detectedSegments.icc = true; // ICC Profile
-        } else if (marker >= 0xFFE3 && marker <= 0xFFEF) {
-          detectedSegments.otherApp.push(`APP${marker - 0xFFE0}`);
-        }
-        
-        offset += 2 + segmentLength;
-      } else {
-        offset++;
-      }
-    }
-
     const tags = {
       hasExif: false,
       detectedSegments,
       allTags: []
     };
 
-    if (exifDataView) {
-      const tiffHeader = exifDataView.getUint16(0, false);
-      if (tiffHeader === 0x4949) {
-        isLittleEndian = true;
-      } else if (tiffHeader === 0x4D4D) {
-        isLittleEndian = false;
-      } else {
-        return tags;
-      }
+    // Check if PNG
+    const isPng = view.byteLength >= 8 &&
+                  view.getUint32(0, false) === 0x89504E47 &&
+                  view.getUint32(4, false) === 0x0D0A1A0A;
 
-      if (exifDataView.getUint16(2, isLittleEndian) !== 0x002A) {
-        return tags;
-      }
+    if (isPng) {
+      let offset = 8;
+      const length = view.byteLength;
+      const decoder = new TextDecoder('utf-8');
 
-      const firstIfdOffset = exifDataView.getUint32(4, isLittleEndian);
-      tags.hasExif = true;
+      while (offset < length) {
+        if (offset + 8 > length) break;
+        const chunkLength = view.getUint32(offset, false);
+        const chunkType = String.fromCharCode(
+          view.getUint8(offset + 4),
+          view.getUint8(offset + 5),
+          view.getUint8(offset + 6),
+          view.getUint8(offset + 7)
+        );
 
-      const parsedOffsets = new Set();
+        const totalChunkLength = 12 + chunkLength;
+        if (offset + totalChunkLength > length) break;
 
-      const parseIfd = (ifdOffset, group = 'Image') => {
-        if (ifdOffset >= exifDataView.byteLength || parsedOffsets.has(ifdOffset)) return;
-        parsedOffsets.add(ifdOffset);
-        
-        const numEntries = exifDataView.getUint16(ifdOffset, isLittleEndian);
-        let nextOffset = ifdOffset + 2;
-
-        for (let i = 0; i < numEntries; i++) {
-          if (nextOffset + 12 > exifDataView.byteLength) break;
-          const tag = exifDataView.getUint16(nextOffset, isLittleEndian);
-          const type = exifDataView.getUint16(nextOffset + 2, isLittleEndian);
-          const count = exifDataView.getUint32(nextOffset + 4, isLittleEndian);
-          const valOffset = exifDataView.getUint32(nextOffset + 8, isLittleEndian);
-
-          const value = readTagValue(exifDataView, nextOffset, valOffset, type, count, isLittleEndian);
-          
-          if (value !== null && value !== undefined) {
-            if (tag === 0x8825) { // GPS Info IFD Pointer
-              parseIfd(valOffset, 'GPS');
-            } else if (tag === 0x8769) { // Exif SubIFD Pointer
-              parseIfd(valOffset, 'Camera');
-            } else {
-              const info = TAG_NAMES[tag] || { name: `Tag_0x${tag.toString(16).toUpperCase()}`, desc: 'Vendor specific field' };
-              const formatted = formatTagValue(tag, value);
-              
-              tags.allTags.push({
-                tag,
-                hex: `0x${tag.toString(16).toUpperCase().padStart(4, '0')}`,
-                group,
-                name: info.name,
-                desc: info.desc,
-                raw: value,
-                formatted
-              });
-
-              if (tag === 0x010F) tags.make = value;
-              else if (tag === 0x0110) tags.model = value;
-              else if (tag === 0x0132) tags.dateTime = value;
-              else if (tag === 0x013B) tags.artist = value;
-              else if (tag === 0x010E) tags.description = value;
-              else if (tag === 0x0131) tags.software = value;
-              else if (tag === 0x829D) tags.fNumber = formatted;
-              else if (tag === 0x829A) tags.exposureTime = formatted;
-              else if (tag === 0x8827) tags.iso = value;
-              else if (tag === 0x920A) tags.focalLength = formatted;
+        if (chunkType === 'eXIf') {
+          detectedSegments.exif = true;
+          const exifDataView = new DataView(buffer, offset + 8, chunkLength);
+          parseExifDataView(exifDataView, tags);
+        } else if (chunkType === 'iCCP') {
+          detectedSegments.icc = true;
+        } else if (['tEXt', 'zTXt', 'iTXt'].includes(chunkType)) {
+          detectedSegments.comments = true;
+          try {
+            const dataBytes = new Uint8Array(buffer, offset + 8, chunkLength);
+            let nullIdx = -1;
+            for (let j = 0; j < dataBytes.length; j++) {
+              if (dataBytes[j] === 0) {
+                nullIdx = j;
+                break;
+              }
             }
+            if (nullIdx !== -1) {
+              const key = decoder.decode(dataBytes.slice(0, nullIdx)).trim();
+              let val = '';
+              if (chunkType === 'tEXt') {
+                val = decoder.decode(dataBytes.slice(nullIdx + 1)).trim();
+              } else if (chunkType === 'iTXt') {
+                let scanIdx = nullIdx + 3; // skip compression flag/method
+                while (scanIdx < dataBytes.length && dataBytes[scanIdx] !== 0) scanIdx++;
+                scanIdx++;
+                while (scanIdx < dataBytes.length && dataBytes[scanIdx] !== 0) scanIdx++;
+                scanIdx++;
+                val = decoder.decode(dataBytes.slice(scanIdx)).trim();
+              } else if (chunkType === 'zTXt') {
+                val = '[Compressed Metadata Text]';
+              }
+
+              if (key && val) {
+                tags.allTags.push({
+                  tag: 0,
+                  hex: '0x0000',
+                  group: 'PNG Text',
+                  name: key,
+                  desc: 'Text metadata chunk',
+                  raw: val,
+                  formatted: val
+                });
+                
+                const lowerKey = key.toLowerCase();
+                if (lowerKey === 'author' || lowerKey === 'artist') tags.artist = val;
+                else if (lowerKey === 'description' || lowerKey === 'title') tags.description = val;
+                else if (lowerKey === 'creation time' || lowerKey === 'date') tags.dateTime = val;
+                else if (lowerKey === 'software') tags.software = val;
+              }
+            }
+          } catch (e) {
+            console.error('Error decoding PNG text chunk', e);
           }
-          nextOffset += 12;
         }
-      };
 
-      parseIfd(firstIfdOffset);
+        offset += totalChunkLength;
+        if (chunkType === 'IEND') break;
+      }
+      return tags;
+    }
 
-      const latTag = tags.allTags.find(t => t.tag === 0x0002);
-      const latRefTag = tags.allTags.find(t => t.tag === 0x0001);
-      const lonTag = tags.allTags.find(t => t.tag === 0x0004);
-      const lonRefTag = tags.allTags.find(t => t.tag === 0x0003);
+    // Check SOI marker for JPEG
+    if (view.getUint16(0, false) !== 0xFFD8) {
+      return { _error: 'Not a valid JPEG or PNG image' };
+    }
 
-      if (latTag && latRefTag && lonTag && lonRefTag) {
-        const latVals = latTag.raw;
-        const latRef = latRefTag.raw;
-        const lonVals = lonTag.raw;
-        const lonRef = lonRefTag.raw;
+    let offset = 2;
+    const length = view.byteLength;
+    let exifDataView = null;
 
-        if (Array.isArray(latVals) && latVals.length === 3 && Array.isArray(lonVals) && lonVals.length === 3) {
-          const latDeg = latVals[0], latMin = latVals[1], latSec = latVals[2];
-          const lonDeg = lonVals[0], lonMin = lonVals[1], lonSec = lonVals[2];
-
-          const decimalLat = (latDeg + latMin / 60 + latSec / 3600) * (latRef === 'S' ? -1 : 1);
-          const decimalLon = (lonDeg + lonMin / 60 + lonSec / 3600) * (lonRef === 'W' ? -1 : 1);
-
-          tags.gps = `${decimalLat.toFixed(6)}, ${decimalLon.toFixed(6)}`;
-          tags.gpsDms = `${latDeg}°${latMin}'${latSec.toFixed(1)}"${latRef}, ${lonDeg}°${lonMin}'${lonSec.toFixed(1)}"${lonRef}`;
+    try {
+      while (offset < length - 2) {
+        const marker = view.getUint16(offset, false);
+        if ((marker & 0xFF00) === 0xFF00) {
+          if (marker === 0xFFDA) { // SOS - Pixel data start
+            break;
+          }
+          const segmentLength = view.getUint16(offset + 2, false);
+          
+          if (marker === 0xFFE1) {
+            // APP1: EXIF or XMP
+            if (offset + 10 < length) {
+              const header = view.getUint32(offset + 4, false);
+              if (header === 0x45786966) { // "Exif"
+                detectedSegments.exif = true;
+                const exifStart = offset + 10;
+                exifDataView = new DataView(buffer, exifStart, segmentLength - 8);
+              } else {
+                // Check if XMP
+                let isXmp = true;
+                const xmpString = "http://ns.adobe.com/xap/1.0/";
+                for (let j = 0; j < 20; j++) {
+                  if (view.getUint8(offset + 4 + j) !== xmpString.charCodeAt(j)) {
+                    isXmp = false;
+                    break;
+                  }
+                }
+                if (isXmp) {
+                  detectedSegments.xmp = true;
+                }
+              }
+            }
+          } else if (marker === 0xFFED) {
+            detectedSegments.iptc = true; // IPTC / Photoshop IRB
+          } else if (marker === 0xFFFE) {
+            detectedSegments.comments = true; // Comment
+          } else if (marker === 0xFFE2) {
+            detectedSegments.icc = true; // ICC Profile
+          } else if (marker >= 0xFFE3 && marker <= 0xFFEF) {
+            detectedSegments.otherApp.push(`APP${marker - 0xFFE0}`);
+          }
+          
+          offset += 2 + segmentLength;
+        } else {
+          offset++;
         }
+      }
+    } catch (err) {
+      console.warn('Malformed JPEG headers read warning', err);
+    }
+
+    if (exifDataView) {
+      try {
+        parseExifDataView(exifDataView, tags);
+      } catch (err) {
+        console.error('Error parsing EXIF DataView', err);
       }
     }
 
@@ -539,14 +637,16 @@ export default function MetadataPage() {
 
     try {
       const arrayBuffer = await readFileAsArrayBuffer(fileObj);
-      const strippedBuffer = stripExifBinary(arrayBuffer);
+      const isPng = fileObj.name.toLowerCase().endsWith('.png') || fileObj.type === 'image/png';
+      const strippedBuffer = isPng ? stripPngBinary(arrayBuffer) : stripExifBinary(arrayBuffer);
       const strippedBlob = new Blob([strippedBuffer], { type: fileObj.type });
       const nameWithoutExt = fileObj.name.replace(/\.[^/.]+$/, '');
-      saveAs(strippedBlob, `${nameWithoutExt}_cleaned.jpg`);
+      const ext = isPng ? 'png' : 'jpg';
+      saveAs(strippedBlob, `${nameWithoutExt}_cleaned.${ext}`);
       saveHistory('EXIF Stripper', `${fileObj.name} (Metadata Erased)`);
     } catch (err) {
       console.error(err);
-      setErrorMsg('Failed to strip metadata. Make sure the file is a valid JPEG.');
+      setErrorMsg('Failed to strip metadata. Make sure the file is a valid JPEG or PNG.');
     } finally {
       setIsStripping(false);
     }
@@ -566,10 +666,12 @@ export default function MetadataPage() {
       for (let i = 0; i < files.length; i++) {
         const fileObj = files[i];
         const arrayBuffer = await readFileAsArrayBuffer(fileObj);
-        const strippedBuffer = stripExifBinary(arrayBuffer);
+        const isPng = fileObj.name.toLowerCase().endsWith('.png') || fileObj.type === 'image/png';
+        const strippedBuffer = isPng ? stripPngBinary(arrayBuffer) : stripExifBinary(arrayBuffer);
         const strippedBlob = new Blob([strippedBuffer], { type: fileObj.type });
         const nameWithoutExt = fileObj.name.replace(/\.[^/.]+$/, '');
-        zip.file(`${nameWithoutExt}_cleaned.jpg`, strippedBlob);
+        const ext = isPng ? 'png' : 'jpg';
+        zip.file(`${nameWithoutExt}_cleaned.${ext}`, strippedBlob);
         setProcessedCount(i + 1);
       }
 
@@ -594,10 +696,12 @@ export default function MetadataPage() {
       for (let i = 0; i < files.length; i++) {
         const fileObj = files[i];
         const arrayBuffer = await readFileAsArrayBuffer(fileObj);
-        const strippedBuffer = stripExifBinary(arrayBuffer);
+        const isPng = fileObj.name.toLowerCase().endsWith('.png') || fileObj.type === 'image/png';
+        const strippedBuffer = isPng ? stripPngBinary(arrayBuffer) : stripExifBinary(arrayBuffer);
         const strippedBlob = new Blob([strippedBuffer], { type: fileObj.type });
         const nameWithoutExt = fileObj.name.replace(/\.[^/.]+$/, '');
-        saveAs(strippedBlob, `${nameWithoutExt}_cleaned.jpg`);
+        const ext = isPng ? 'png' : 'jpg';
+        saveAs(strippedBlob, `${nameWithoutExt}_cleaned.${ext}`);
         setProcessedCount(i + 1);
       }
       saveHistory('EXIF Stripper', `${files.length} images cleaned and downloaded`);
@@ -676,6 +780,74 @@ export default function MetadataPage() {
     return result.buffer;
   };
 
+  // Complete lossless binary stripper for PNG chunks
+  const stripPngBinary = (arrayBuffer) => {
+    const view = new DataView(arrayBuffer);
+    if (view.byteLength < 8) {
+      throw new Error('Not a valid PNG image');
+    }
+    
+    // Check PNG signature: 89 50 4E 47 0D 0A 1A 0A
+    if (
+      view.getUint32(0, false) !== 0x89504E47 ||
+      view.getUint32(4, false) !== 0x0D0A1A0A
+    ) {
+      throw new Error('Not a valid PNG image');
+    }
+
+    let offset = 8;
+    const length = view.byteLength;
+    const segments = [];
+    
+    // Add PNG signature
+    segments.push(new Uint8Array(arrayBuffer, 0, 8));
+
+    while (offset < length) {
+      if (offset + 8 > length) {
+        break;
+      }
+      
+      const chunkLength = view.getUint32(offset, false);
+      const chunkType = String.fromCharCode(
+        view.getUint8(offset + 4),
+        view.getUint8(offset + 5),
+        view.getUint8(offset + 6),
+        view.getUint8(offset + 7)
+      );
+
+      const totalChunkLength = 12 + chunkLength;
+      
+      if (offset + totalChunkLength > length) {
+        break;
+      }
+
+      const essentialChunks = ['IHDR', 'PLTE', 'IDAT', 'IEND'];
+      const colorProfileChunks = ['iCCP', 'gAMA', 'cHRM', 'sRGB', 'pHYs'];
+      
+      const shouldKeep = essentialChunks.includes(chunkType) || colorProfileChunks.includes(chunkType);
+
+      if (shouldKeep) {
+        segments.push(new Uint8Array(arrayBuffer, offset, totalChunkLength));
+      }
+      
+      offset += totalChunkLength;
+      if (chunkType === 'IEND') {
+        break;
+      }
+    }
+
+    let totalSize = 0;
+    segments.forEach(s => totalSize += s.byteLength);
+    const result = new Uint8Array(totalSize);
+    let currentOffset = 0;
+    segments.forEach(s => {
+      result.set(s, currentOffset);
+      currentOffset += s.byteLength;
+    });
+
+    return result.buffer;
+  };
+
   const formatSize = (b) => {
     if (b >= 1024 * 1024) return (b / (1024 * 1024)).toFixed(2) + ' MB';
     return (b / 1024).toFixed(1) + ' KB';
@@ -712,9 +884,9 @@ export default function MetadataPage() {
         <div style={{ maxWidth: 680, margin: '0 auto', width: '100%' }}>
           <UploadBox
             onFileSelect={handleFileSelect}
-            acceptedFormats={['.jpg', '.jpeg']}
+            acceptedFormats={['.jpg', '.jpeg', '.png']}
             multiple={true}
-            buttonLabel="Select JPEG Images"
+            buttonLabel="Select JPEG or PNG Images"
           />
         </div>
       ) : (
@@ -776,7 +948,7 @@ export default function MetadataPage() {
               <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
               Add Photos
             </button>
-            <input type="file" accept=".jpg,.jpeg" multiple style={{ display: 'none' }}
+            <input type="file" accept=".jpg,.jpeg,.png" multiple style={{ display: 'none' }}
               onChange={e => {
                 const newFiles = Array.from(e.target.files || []).map(f =>
                   Object.assign(f, { preview: URL.createObjectURL(f), id: Math.random().toString(36).slice(2, 9) })
