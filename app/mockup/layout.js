@@ -1,6 +1,6 @@
 export const metadata = {
-  title: 'Device Mockup Generator - Wrap Screenshots in Laptop & Phone Frames',
-  description: 'Upload your app or site screenshots and locally wrap them in MacBook, iPhone, and Safari browser frames with beautiful custom gradient backgrounds. 100% client-side and secure.',
+  title: 'Mockup Studio - Wrap Screenshots in Device & Browser Frames',
+  description: 'Upload your app or site screenshots and locally wrap them in MacBook, iPhone, iPad, Apple Watch, and browser frames with clean solid, transparent, or custom colors. 100% client-side and secure.',
 };
 
 export default function MockupLayout({ children }) {
