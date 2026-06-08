@@ -1064,12 +1064,7 @@ export default function MetadataPage() {
         });
       }
 
-      // Default fallback values if empty to match competitor
-      if (actionsList.length === 0) actionsList.push('c2pa.created', 'c2pa.edited');
-      if (actionsDescriptions.length === 0) actionsDescriptions.push('Created by Google Generative AI.', 'Applied imperceptible SynthID watermark.');
-      if (actionsSourceTypes.length === 0) actionsSourceTypes.push('http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia', 'http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia');
-      if (actionsIngredients.length === 0) actionsIngredients.push('self#jumbf=c2pa.assertions/c2pa.ingredient.v3');
-      if (!relationship) relationship = 'parentOf';
+      // Only keep real parsed values — no hardcoded fallback filler
 
       let manifestUrn = manifestBox.label || '';
       if (!manifestUrn.startsWith('urn:')) {
@@ -1077,27 +1072,9 @@ export default function MetadataPage() {
           manifestUrn = claimData.claim_uri.replace(/\/c2pa\.claim$/, '').replace(/^self#jumbf=\/c2pa\//, '');
         }
       }
-      if (!manifestUrn) {
-        manifestUrn = 'urn:c2pa:6d9f844f-809b-76fb-80f6-450bdf5f5adb';
-      }
       manifestUrn = manifestUrn.replace(/^urn:c2pa:urn:c2pa:/i, 'urn:c2pa:');
 
-      const validationCodes = [
-        'timeStamp.validated', 'timeStamp.trusted', 'signingCredential.ocsp.notRevoked',
-        'signingCredential.trusted', 'claimSignature.insideValidity', 'claimSignature.validated',
-        'assertion.hashedURI.match', 'assertion.hashedURI.match', 'assertion.dataHash.match'
-      ];
-      const validationUrls = [
-        `self#jumbf=/c2pa/${manifestUrn}/c2pa.signature`,
-        `self#jumbf=/c2pa/${manifestUrn}/c2pa.signature`,
-        `self#jumbf=/c2pa/${manifestUrn}/c2pa.signature`,
-        `self#jumbf=/c2pa/${manifestUrn}/c2pa.signature`,
-        `self#jumbf=/c2pa/${manifestUrn}/c2pa.signature`,
-        `self#jumbf=/c2pa/${manifestUrn}/c2pa.signature`,
-        `self#jumbf=/c2pa/${manifestUrn}/c2pa.assertions/c2pa.actions.v2`,
-        `self#jumbf=/c2pa/${manifestUrn}/c2pa.assertions/c2pa.hash.data`,
-        `self#jumbf=/c2pa/${manifestUrn}/c2pa.assertions/c2pa.hash.data`
-      ];
+
 
       tags.allTags.push({
         tag: 0, hex: '0x0000', group: 'Content Credentials',
@@ -1109,103 +1086,119 @@ export default function MetadataPage() {
         name: 'JUMD Label', desc: 'C2PA JUMD Box Label',
         raw: manifestBox.label || 'c2pa', formatted: manifestBox.label || 'c2pa'
       });
-      tags.allTags.push({
-        tag: 0, hex: '0x0000', group: 'Content Credentials',
-        name: 'Item 2', desc: 'Second item in the manifest store',
-        raw: item2Label, formatted: item2Label
-      });
-      tags.allTags.push({
-        tag: 0, hex: '0x0000', group: 'Content Credentials',
-        name: 'Instance ID', desc: 'Manifest Instance ID',
-        raw: instanceId || '41378363-d75d-6e05-6622-474d643d3452', formatted: instanceId || '41378363-d75d-6e05-6622-474d643d3452'
-      });
-      tags.allTags.push({
-        tag: 0, hex: '0x0000', group: 'Content Credentials',
-        name: 'Claim Generator Info Name', desc: 'C2PA Claim Generator Name',
-        raw: claimGenName || 'Google C2PA Core Generator Library', formatted: claimGenName || 'Google C2PA Core Generator Library'
-      });
-      tags.allTags.push({
-        tag: 0, hex: '0x0000', group: 'Content Credentials',
-        name: 'Claim Generator Info Version', desc: 'C2PA Claim Generator Version',
-        raw: claimGenVer || '926983395:927509007', formatted: claimGenVer || '926983395:927509007'
-      });
+      if (item2Label && item2Label !== 'null') {
+        tags.allTags.push({
+          tag: 0, hex: '0x0000', group: 'Content Credentials',
+          name: 'Item 2', desc: 'Second item in the manifest store',
+          raw: item2Label, formatted: item2Label
+        });
+      }
+      if (instanceId) {
+        tags.allTags.push({
+          tag: 0, hex: '0x0000', group: 'Content Credentials',
+          name: 'Instance ID', desc: 'Manifest Instance ID',
+          raw: instanceId, formatted: instanceId
+        });
+      }
+      if (claimGenName) {
+        tags.allTags.push({
+          tag: 0, hex: '0x0000', group: 'Content Credentials',
+          name: 'Claim Generator Info Name', desc: 'C2PA Claim Generator Name',
+          raw: claimGenName, formatted: claimGenName
+        });
+      }
+      if (claimGenVer) {
+        tags.allTags.push({
+          tag: 0, hex: '0x0000', group: 'Content Credentials',
+          name: 'Claim Generator Info Version', desc: 'C2PA Claim Generator Version',
+          raw: claimGenVer, formatted: claimGenVer
+        });
+      }
 
-      const defaultAssertions = [
-        `self#jumbf=${manifestUrn}/c2pa.assertions/c2pa.actions.v2`,
-        `self#jumbf=${manifestUrn}/c2pa.assertions/c2pa.hash.data`
-      ];
-      const assertionsStr = assertionUrls.length > 0 ? assertionUrls.join(', ') : defaultAssertions.join(', ');
-      tags.allTags.push({
-        tag: 0, hex: '0x0000', group: 'Content Credentials',
-        name: 'Created Assertions Url', desc: 'C2PA Assertions URLs',
-        raw: assertionsStr, formatted: assertionsStr
-      });
+      if (assertionUrls.length > 0) {
+        const assertionsStr = assertionUrls.join(', ');
+        tags.allTags.push({
+          tag: 0, hex: '0x0000', group: 'Content Credentials',
+          name: 'Created Assertions Url', desc: 'C2PA Assertions URLs',
+          raw: assertionsStr, formatted: assertionsStr
+        });
+      }
 
-      tags.allTags.push({
-        tag: 0, hex: '0x0000', group: 'Content Credentials',
-        name: 'Signature', desc: 'C2PA Signature URL',
-        raw: `self#jumbf=${manifestUrn}/c2pa.signature`, formatted: `self#jumbf=${manifestUrn}/c2pa.signature`
-      });
-      tags.allTags.push({
-        tag: 0, hex: '0x0000', group: 'Content Credentials',
-        name: 'Alg', desc: 'C2PA Hashing Algorithm',
-        raw: alg || 'sha256', formatted: alg || 'sha256'
-      });
-      tags.allTags.push({
-        tag: 0, hex: '0x0000', group: 'Content Credentials',
-        name: 'Exclusions Start', desc: 'C2PA Signature Exclusion Start Offset',
-        raw: exclusionsStart !== '' ? exclusionsStart : '20', formatted: exclusionsStart !== '' ? exclusionsStart : '20'
-      });
-      tags.allTags.push({
-        tag: 0, hex: '0x0000', group: 'Content Credentials',
-        name: 'Exclusions Length', desc: 'C2PA Signature Exclusion Range Length',
-        raw: exclusionsLength !== '' ? exclusionsLength : '6026', formatted: exclusionsLength !== '' ? exclusionsLength : '6026'
-      });
-      tags.allTags.push({
-        tag: 0, hex: '0x0000', group: 'Content Credentials',
-        name: 'Actions Action', desc: 'C2PA Actions performed',
-        raw: actionsList.join(', '), formatted: actionsList.join(', ')
-      });
-      tags.allTags.push({
-        tag: 0, hex: '0x0000', group: 'Content Credentials',
-        name: 'Actions Description', desc: 'C2PA Actions descriptions',
-        raw: actionsDescriptions.join(', '), formatted: actionsDescriptions.join(', ')
-      });
-      tags.allTags.push({
-        tag: 0, hex: '0x0000', group: 'Content Credentials',
-        name: 'Actions Digital Source Type', desc: 'C2PA Actions Digital Source Types',
-        raw: actionsSourceTypes.join(', '), formatted: actionsSourceTypes.join(', ')
-      });
-      tags.allTags.push({
-        tag: 0, hex: '0x0000', group: 'Content Credentials',
-        name: 'Actions Parameters Ingredients Url', desc: 'C2PA Actions Ingredients URLs',
-        raw: actionsIngredients.join(', '), formatted: actionsIngredients.join(', ')
-      });
-      tags.allTags.push({
-        tag: 0, hex: '0x0000', group: 'Content Credentials',
-        name: 'Relationship', desc: 'C2PA Ingredients Relationship',
-        raw: relationship, formatted: relationship
-      });
-      tags.allTags.push({
-        tag: 0, hex: '0x0000', group: 'Content Credentials',
-        name: 'Validation Results Active Manifest Success Code', desc: 'C2PA Validation Success Codes',
-        raw: validationCodes.join(', '), formatted: validationCodes.join(', ')
-      });
-      tags.allTags.push({
-        tag: 0, hex: '0x0000', group: 'Content Credentials',
-        name: 'Validation Results Active Manifest Success Url', desc: 'C2PA Validation Success URLs',
-        raw: validationUrls.join(', '), formatted: validationUrls.join(', ')
-      });
-      tags.allTags.push({
-        tag: 0, hex: '0x0000', group: 'Content Credentials',
-        name: 'Active Manifest Url', desc: 'C2PA Active Manifest URL',
-        raw: `self#jumbf=/c2pa/${manifestUrn}`, formatted: `self#jumbf=/c2pa/${manifestUrn}`
-      });
-      tags.allTags.push({
-        tag: 0, hex: '0x0000', group: 'Content Credentials',
-        name: 'Claim Signature Url', desc: 'C2PA Claim Signature URL',
-        raw: `self#jumbf=/c2pa/${manifestUrn}/c2pa.signature`, formatted: `self#jumbf=/c2pa/${manifestUrn}/c2pa.signature`
-      });
+      if (signatureUrl) {
+        tags.allTags.push({
+          tag: 0, hex: '0x0000', group: 'Content Credentials',
+          name: 'Signature', desc: 'C2PA Signature URL',
+          raw: signatureUrl, formatted: signatureUrl
+        });
+      }
+      if (alg) {
+        tags.allTags.push({
+          tag: 0, hex: '0x0000', group: 'Content Credentials',
+          name: 'Alg', desc: 'C2PA Hashing Algorithm',
+          raw: alg, formatted: alg
+        });
+      }
+      if (exclusionsStart !== '') {
+        tags.allTags.push({
+          tag: 0, hex: '0x0000', group: 'Content Credentials',
+          name: 'Exclusions Start', desc: 'C2PA Signature Exclusion Start Offset',
+          raw: exclusionsStart, formatted: exclusionsStart
+        });
+      }
+      if (exclusionsLength !== '') {
+        tags.allTags.push({
+          tag: 0, hex: '0x0000', group: 'Content Credentials',
+          name: 'Exclusions Length', desc: 'C2PA Signature Exclusion Range Length',
+          raw: exclusionsLength, formatted: exclusionsLength
+        });
+      }
+      if (actionsList.length > 0) {
+        tags.allTags.push({
+          tag: 0, hex: '0x0000', group: 'Content Credentials',
+          name: 'Actions Action', desc: 'C2PA Actions performed',
+          raw: actionsList.join(', '), formatted: actionsList.join(', ')
+        });
+      }
+      if (actionsDescriptions.length > 0) {
+        tags.allTags.push({
+          tag: 0, hex: '0x0000', group: 'Content Credentials',
+          name: 'Actions Description', desc: 'C2PA Actions descriptions',
+          raw: actionsDescriptions.join(', '), formatted: actionsDescriptions.join(', ')
+        });
+      }
+      if (actionsSourceTypes.length > 0) {
+        tags.allTags.push({
+          tag: 0, hex: '0x0000', group: 'Content Credentials',
+          name: 'Actions Digital Source Type', desc: 'C2PA Actions Digital Source Types',
+          raw: actionsSourceTypes.join(', '), formatted: actionsSourceTypes.join(', ')
+        });
+      }
+      if (actionsIngredients.length > 0) {
+        tags.allTags.push({
+          tag: 0, hex: '0x0000', group: 'Content Credentials',
+          name: 'Actions Parameters Ingredients Url', desc: 'C2PA Actions Ingredients URLs',
+          raw: actionsIngredients.join(', '), formatted: actionsIngredients.join(', ')
+        });
+      }
+      if (relationship) {
+        tags.allTags.push({
+          tag: 0, hex: '0x0000', group: 'Content Credentials',
+          name: 'Relationship', desc: 'C2PA Ingredients Relationship',
+          raw: relationship, formatted: relationship
+        });
+      }
+      if (manifestUrn) {
+        tags.allTags.push({
+          tag: 0, hex: '0x0000', group: 'Content Credentials',
+          name: 'Active Manifest Url', desc: 'C2PA Active Manifest URL',
+          raw: `self#jumbf=/c2pa/${manifestUrn}`, formatted: `self#jumbf=/c2pa/${manifestUrn}`
+        });
+        tags.allTags.push({
+          tag: 0, hex: '0x0000', group: 'Content Credentials',
+          name: 'Claim Signature Url', desc: 'C2PA Claim Signature URL',
+          raw: `self#jumbf=/c2pa/${manifestUrn}/c2pa.signature`, formatted: `self#jumbf=/c2pa/${manifestUrn}/c2pa.signature`
+        });
+      }
 
       tags.detectedSegments = tags.detectedSegments || {};
       tags.detectedSegments.otherApp = tags.detectedSegments.otherApp || [];

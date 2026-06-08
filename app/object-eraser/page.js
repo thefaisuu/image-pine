@@ -286,14 +286,10 @@ export default function ObjectEraserPage() {
         const width = canvas.width;
         const height = canvas.height;
 
-        // Draw original clean image onto canvas first to get clean boundary pixels
+        // Draw original clean image onto canvas first
         ctx.clearRect(0, 0, width, height);
         ctx.drawImage(originalImageRef.current, 0, 0);
 
-        const imgData = ctx.getImageData(0, 0, width, height);
-        const data = imgData.data;
-
-        // Extract mask pixels (unblurred mask for patch-based synthesis)
         const maskData = maskCtx.getImageData(0, 0, width, height).data;
 
         // Find mask bounding box
@@ -302,8 +298,8 @@ export default function ObjectEraserPage() {
         for (let y = 0; y < height; y++) {
           const rowOffset = y * width;
           for (let x = 0; x < width; x++) {
-            const idx = (rowOffset + x) * 4;
-            if (maskData[idx + 3] > 10) {
+            const mi = (rowOffset + x) * 4;
+            if (maskData[mi + 3] > 10) {
               if (x < minX) minX = x;
               if (x > maxX) maxX = x;
               if (y < minY) minY = y;
@@ -319,8 +315,7 @@ export default function ObjectEraserPage() {
           return;
         }
 
-        // Add padding around mask bounding box
-        const pad = 35;
+        const pad = 40;
         minX = Math.max(0, minX - pad);
         maxX = Math.min(width - 1, maxX + pad);
         minY = Math.max(0, minY - pad);
@@ -329,275 +324,205 @@ export default function ObjectEraserPage() {
         const cropW = maxX - minX + 1;
         const cropH = maxY - minY + 1;
 
-        // Copy cropped image and mask data
         const cropImgData = ctx.getImageData(minX, minY, cropW, cropH);
-        const cropPixels = cropImgData.data; // Uint8ClampedArray of size cropW * cropH * 4
+        const cropPixels = new Float32Array(cropW * cropH * 4);
+        for (let i = 0; i < cropImgData.data.length; i++) cropPixels[i] = cropImgData.data[i];
 
         const cropMaskData = maskCtx.getImageData(minX, minY, cropW, cropH).data;
-
-        // Set up known array (1 = known/unmasked, 0 = masked)
-        const known = new Uint8Array(cropW * cropH);
-        let maskedCount = 0;
+        const isMasked = new Uint8Array(cropW * cropH);
         for (let i = 0; i < cropW * cropH; i++) {
-          if (cropMaskData[i * 4 + 3] > 15) {
-            known[i] = 0; // masked
-            maskedCount++;
-          } else {
-            known[i] = 1; // known
-          }
+          isMasked[i] = cropMaskData[i * 4 + 3] > 15 ? 1 : 0;
         }
 
-        // Patch-based Exemplar Inpainting parameters
-        const r = 3; // Patch radius (7x7 patch)
-        const searchRadius = 32;
-
-        let maxIterations = Math.min(800, Math.ceil(maskedCount / 2));
-        let iter = 0;
-
-        // We will keep track of border pixels
-        const borderPixels = new Int32Array(cropW * cropH);
-
-        while (maskedCount > 0 && iter < maxIterations) {
-          iter++;
-          
-          let borderCount = 0;
-          // Find border pixels (masked pixels with at least one known 4-neighbor)
-          for (let y = r; y < cropH - r; y++) {
-            const rowIdx = y * cropW;
-            for (let x = r; x < cropW - r; x++) {
-              const idx = rowIdx + x;
-              if (known[idx] === 0) {
-                const isBorder = 
-                  known[idx - 1] === 1 || known[idx + 1] === 1 || 
-                  known[idx - cropW] === 1 || known[idx + cropW] === 1;
-                if (isBorder) {
-                  borderPixels[borderCount++] = idx;
-                }
-              }
-            }
-          }
-
-          if (borderCount === 0) {
-            break;
-          }
-
-          // Prioritize border pixels based on confidence (known ratio in the patch)
-          let bestIdx = -1;
-          let maxKnownRatio = -1;
-
-          for (let b = 0; b < borderCount; b++) {
-            const idx = borderPixels[b];
-            const px = idx % cropW;
-            const py = Math.floor(idx / cropW);
-
-            let knownCount = 0;
-            for (let dy = -r; dy <= r; dy++) {
-              const pRowIdx = (py + dy) * cropW;
-              for (let dx = -r; dx <= r; dx++) {
-                if (known[pRowIdx + (px + dx)] === 1) {
-                  knownCount++;
-                }
-              }
-            }
-
-            if (knownCount > maxKnownRatio) {
-              maxKnownRatio = knownCount;
-              bestIdx = idx;
-            }
-          }
-
-          if (bestIdx === -1) break;
-
-          const tx = bestIdx % cropW;
-          const ty = Math.floor(bestIdx / cropW);
-
-          // Find best matching patch in neighborhood
-          let bestSsd = Infinity;
-          let bestX = -1;
-          let bestY = -1;
-
-          const startX = Math.max(r, tx - searchRadius);
-          const endX = Math.min(cropW - 1 - r, tx + searchRadius);
-          const startY = Math.max(r, ty - searchRadius);
-          const endY = Math.min(cropH - 1 - r, ty + searchRadius);
-
-          for (let sy = startY; sy <= endY; sy++) {
-            for (let sx = startX; sx <= endX; sx++) {
-              // Source patch must be completely known
-              let fullyKnown = true;
-              for (let dy = -r; dy <= r; dy++) {
-                const qRowIdx = (sy + dy) * cropW;
-                for (let dx = -r; dx <= r; dx++) {
-                  if (known[qRowIdx + (sx + dx)] === 0) {
-                    fullyKnown = false;
-                    break;
-                  }
-                }
-                if (!fullyKnown) break;
-              }
-
-              if (!fullyKnown) continue;
-
-              // Calculate SSD between target and source patch
-              let ssd = 0;
-              let possible = true;
-
-              for (let dy = -r; dy <= r; dy++) {
-                const tRowIdx = (ty + dy) * cropW;
-                const sRowIdx = (sy + dy) * cropW;
-                for (let dx = -r; dx <= r; dx++) {
-                  const tIdx = tRowIdx + (tx + dx);
-                  if (known[tIdx] === 1) {
-                    const sIdx = sRowIdx + (sx + dx);
-                    
-                    const tDataIdx = tIdx * 4;
-                    const sDataIdx = sIdx * 4;
-
-                    const dr = cropPixels[tDataIdx] - cropPixels[sDataIdx];
-                    const dg = cropPixels[tDataIdx + 1] - cropPixels[sDataIdx + 1];
-                    const db = cropPixels[tDataIdx + 2] - cropPixels[sDataIdx + 2];
-
-                    ssd += dr * dr + dg * dg + db * db;
-                    if (ssd >= bestSsd) {
-                      possible = false;
-                      break;
-                    }
-                  }
-                }
-                if (!possible) break;
-              }
-
-              if (possible && ssd < bestSsd) {
-                bestSsd = ssd;
-                bestX = sx;
-                bestY = sy;
-              }
-            }
-          }
-
-          // Fallback: If no fully known patch was found in local window, search the entire crop
-          if (bestX === -1) {
-            let minDistance = Infinity;
-            for (let sy = r; sy < cropH - r; sy++) {
-              for (let sx = r; sx < cropW - r; sx++) {
-                let fullyKnown = true;
-                for (let dy = -r; dy <= r; dy++) {
-                  const qRowIdx = (sy + dy) * cropW;
-                  for (let dx = -r; dx <= r; dx++) {
-                    if (known[qRowIdx + (sx + dx)] === 0) {
-                      fullyKnown = false;
-                      break;
-                    }
-                  }
-                  if (!fullyKnown) break;
-                }
-
-                if (!fullyKnown) continue;
-
-                const dist = (sx - tx) * (sx - tx) + (sy - ty) * (sy - ty);
-                if (dist < minDistance) {
-                  minDistance = dist;
-                  bestX = sx;
-                  bestY = sy;
-                }
-              }
-            }
-          }
-
-          // Copy texture from source patch to target patch for unknown pixels
-          if (bestX !== -1) {
-            for (let dy = -r; dy <= r; dy++) {
-              const tRowIdx = (ty + dy) * cropW;
-              const sRowIdx = (bestY + dy) * cropW;
-              for (let dx = -r; dx <= r; dx++) {
-                const tIdx = tRowIdx + (tx + dx);
-                if (known[tIdx] === 0) {
-                  const sIdx = sRowIdx + (bestX + dx);
-                  const tDataIdx = tIdx * 4;
-                  const sDataIdx = sIdx * 4;
-
-                  cropPixels[tDataIdx]     = cropPixels[sDataIdx];
-                  cropPixels[tDataIdx + 1] = cropPixels[sDataIdx + 1];
-                  cropPixels[tDataIdx + 2] = cropPixels[sDataIdx + 2];
-                  cropPixels[tDataIdx + 3] = cropPixels[sDataIdx + 3];
-
-                  known[tIdx] = 1;
-                }
-              }
-            }
-          } else {
-            // Absolute fallback: mark target pixel as known to prevent infinite loop
-            known[bestIdx] = 1;
-          }
-
-          // Recalculate remaining masked pixels count
-          maskedCount = 0;
-          for (let i = 0; i < cropW * cropH; i++) {
-            if (known[i] === 0) maskedCount++;
-          }
-        }
-
-        // Fill any remaining isolated masked pixels with neighbor interpolation
+        // ── Fast Marching Method + Telea PDE inpainting ──────────────────────────
+        const KNOWN = 0, BAND = 1, INSIDE = 2;
+        const flags = new Uint8Array(cropW * cropH);
+        const dist = new Float32Array(cropW * cropH).fill(1e9);
         for (let i = 0; i < cropW * cropH; i++) {
-          if (known[i] === 0) {
-            const cx = i % cropW;
-            const cy = Math.floor(i / cropW);
-            let found = false;
-            for (let radius = 1; radius < Math.max(cropW, cropH); radius++) {
-              for (let dy = -radius; dy <= radius; dy++) {
-                const ny = cy + dy;
-                if (ny >= 0 && ny < cropH) {
-                  const nRowIdx = ny * cropW;
-                  for (let dx = -radius; dx <= radius; dx++) {
-                    const nx = cx + dx;
-                    if (nx >= 0 && nx < cropW) {
-                      const nidx = nRowIdx + nx;
-                      if (known[nidx] === 1) {
-                        cropPixels[i * 4] = cropPixels[nidx * 4];
-                        cropPixels[i * 4 + 1] = cropPixels[nidx * 4 + 1];
-                        cropPixels[i * 4 + 2] = cropPixels[nidx * 4 + 2];
-                        known[i] = 1;
-                        found = true;
-                        break;
-                      }
-                    }
-                  }
-                  if (found) break;
-                }
-              }
-              if (found) break;
+          if (isMasked[i]) flags[i] = INSIDE;
+        }
+
+        // Simple binary min-heap for FMM
+        const heapData = [];
+        const heapPush = (i, d) => {
+          heapData.push({ i, d });
+          let idx = heapData.length - 1;
+          while (idx > 0) {
+            const p = (idx - 1) >> 1;
+            if (heapData[p].d <= heapData[idx].d) break;
+            [heapData[p], heapData[idx]] = [heapData[idx], heapData[p]];
+            idx = p;
+          }
+        };
+        const heapPop = () => {
+          const top = heapData[0];
+          const last = heapData.pop();
+          if (heapData.length > 0) {
+            heapData[0] = last;
+            let idx = 0;
+            while (true) {
+              let m = idx;
+              const l = 2 * idx + 1, r = 2 * idx + 2;
+              if (l < heapData.length && heapData[l].d < heapData[m].d) m = l;
+              if (r < heapData.length && heapData[r].d < heapData[m].d) m = r;
+              if (m === idx) break;
+              [heapData[m], heapData[idx]] = [heapData[idx], heapData[m]];
+              idx = m;
+            }
+          }
+          return top;
+        };
+
+        // Initialize narrow band
+        for (let y = 0; y < cropH; y++) {
+          for (let x = 0; x < cropW; x++) {
+            const i = y * cropW + x;
+            if (flags[i] !== INSIDE) continue;
+            const hasKnown = (
+              (x > 0 && flags[i - 1] === KNOWN) ||
+              (x < cropW - 1 && flags[i + 1] === KNOWN) ||
+              (y > 0 && flags[i - cropW] === KNOWN) ||
+              (y < cropH - 1 && flags[i + cropW] === KNOWN)
+            );
+            if (hasKnown) {
+              flags[i] = BAND;
+              dist[i] = 0;
+              heapPush(i, 0);
             }
           }
         }
 
-        // Feather and blend the inpainted crop back into the original image
+        // Telea weighted inpainting for a single pixel
+        const inpaintPixel = (idx) => {
+          const cx = idx % cropW;
+          const cy = Math.floor(idx / cropW);
+          let sumR = 0, sumG = 0, sumB = 0, wSum = 0;
+          const radius = 7;
+          for (let dy = -radius; dy <= radius; dy++) {
+            const ny = cy + dy;
+            if (ny < 0 || ny >= cropH) continue;
+            for (let dx = -radius; dx <= radius; dx++) {
+              const nx = cx + dx;
+              if (nx < 0 || nx >= cropW) continue;
+              const ni = ny * cropW + nx;
+              if (flags[ni] === INSIDE || (dx === 0 && dy === 0)) continue;
+              const dd = Math.sqrt(dx * dx + dy * dy);
+              if (dd > radius) continue;
+              const spatialW = 1.0 / (dd * dd + 1e-6);
+              const levelW = Math.abs(dist[idx] - dist[ni]) / (dd + 1e-6);
+              const w = spatialW * (1 + levelW);
+              const pi = ni * 4;
+              sumR += cropPixels[pi] * w;
+              sumG += cropPixels[pi + 1] * w;
+              sumB += cropPixels[pi + 2] * w;
+              wSum += w;
+            }
+          }
+          if (wSum > 0) {
+            const pi = idx * 4;
+            cropPixels[pi]     = sumR / wSum;
+            cropPixels[pi + 1] = sumG / wSum;
+            cropPixels[pi + 2] = sumB / wSum;
+            cropPixels[pi + 3] = 255;
+          }
+        };
+
+        // FMM main loop
+        while (heapData.length > 0) {
+          const { i } = heapPop();
+          if (flags[i] === KNOWN) continue;
+          flags[i] = KNOWN;
+          inpaintPixel(i);
+
+          const x = i % cropW;
+          const y = Math.floor(i / cropW);
+          const neighbors = [
+            y > 0 ? i - cropW : -1,
+            y < cropH - 1 ? i + cropW : -1,
+            x > 0 ? i - 1 : -1,
+            x < cropW - 1 ? i + 1 : -1
+          ];
+          for (const ni of neighbors) {
+            if (ni < 0 || flags[ni] === KNOWN) continue;
+            const nx = ni % cropW;
+            const ny = Math.floor(ni / cropW);
+            let dh = 1e9, dv = 1e9;
+            if (nx > 0 && flags[ni - 1] === KNOWN) dh = Math.min(dh, dist[ni - 1]);
+            if (nx < cropW - 1 && flags[ni + 1] === KNOWN) dh = Math.min(dh, dist[ni + 1]);
+            if (ny > 0 && flags[ni - cropW] === KNOWN) dv = Math.min(dv, dist[ni - cropW]);
+            if (ny < cropH - 1 && flags[ni + cropW] === KNOWN) dv = Math.min(dv, dist[ni + cropW]);
+            let nd;
+            if (dh === 1e9) nd = dv + 1;
+            else if (dv === 1e9) nd = dh + 1;
+            else {
+              const delta = 2 - (dh - dv) * (dh - dv);
+              nd = delta >= 0 ? (dh + dv + Math.sqrt(delta)) / 2 : Math.min(dh, dv) + 1;
+            }
+            if (nd < dist[ni]) {
+              dist[ni] = nd;
+              if (flags[ni] === INSIDE) flags[ni] = BAND;
+              heapPush(ni, nd);
+            }
+          }
+        }
+
+        // Gaussian smoothing pass within inpainted mask region
+        const smoothed = new Float32Array(cropPixels.length);
+        for (let i = 0; i < cropW * cropH; i++) {
+          if (!isMasked[i]) {
+            smoothed[i * 4]     = cropPixels[i * 4];
+            smoothed[i * 4 + 1] = cropPixels[i * 4 + 1];
+            smoothed[i * 4 + 2] = cropPixels[i * 4 + 2];
+            smoothed[i * 4 + 3] = 255;
+            continue;
+          }
+          const cx = i % cropW;
+          const cy = Math.floor(i / cropW);
+          let sR = 0, sG = 0, sB = 0, sw = 0;
+          const kr = 2;
+          for (let dy = -kr; dy <= kr; dy++) {
+            const ny = cy + dy;
+            if (ny < 0 || ny >= cropH) continue;
+            for (let dx = -kr; dx <= kr; dx++) {
+              const nx = cx + dx;
+              if (nx < 0 || nx >= cropW) continue;
+              const ni = ny * cropW + nx;
+              const wt = Math.exp(-(dx * dx + dy * dy) / (2 * kr * kr));
+              sR += cropPixels[ni * 4] * wt;
+              sG += cropPixels[ni * 4 + 1] * wt;
+              sB += cropPixels[ni * 4 + 2] * wt;
+              sw += wt;
+            }
+          }
+          smoothed[i * 4]     = sw > 0 ? sR / sw : cropPixels[i * 4];
+          smoothed[i * 4 + 1] = sw > 0 ? sG / sw : cropPixels[i * 4 + 1];
+          smoothed[i * 4 + 2] = sw > 0 ? sB / sw : cropPixels[i * 4 + 2];
+          smoothed[i * 4 + 3] = 255;
+        }
+
+        // Feathered blend at mask edges
         const tempMaskCanvas = document.createElement('canvas');
         tempMaskCanvas.width = cropW;
         tempMaskCanvas.height = cropH;
         const tempMaskCtx = tempMaskCanvas.getContext('2d');
         if (tempMaskCtx) {
-          tempMaskCtx.filter = 'blur(4px)';
+          tempMaskCtx.filter = 'blur(6px)';
           tempMaskCtx.drawImage(maskCanvas, minX, minY, cropW, cropH, 0, 0, cropW, cropH);
         }
+        const blurredMask = tempMaskCtx.getImageData(0, 0, cropW, cropH).data;
+        const originalCropPixels = cropImgData.data;
 
-        const cropFeatheredMask = (tempMaskCtx || maskCtx).getImageData(0, 0, cropW, cropH).data;
-
-        // Blend: originalColor * (1 - alpha) + inpaintedColor * alpha
-        const originalCropImgData = ctx.getImageData(minX, minY, cropW, cropH);
-        const originalCropPixels = originalCropImgData.data;
-
+        const resultData = new Uint8ClampedArray(cropW * cropH * 4);
         for (let i = 0; i < cropW * cropH; i++) {
-          const idx = i * 4;
-          const alpha = cropFeatheredMask[idx + 3] / 255;
-          cropPixels[idx]     = Math.round(originalCropPixels[idx] * (1 - alpha) + cropPixels[idx] * alpha);
-          cropPixels[idx + 1] = Math.round(originalCropPixels[idx + 1] * (1 - alpha) + cropPixels[idx + 1] * alpha);
-          cropPixels[idx + 2] = Math.round(originalCropPixels[idx + 2] * (1 - alpha) + cropPixels[idx + 2] * alpha);
+          const alpha = blurredMask[i * 4 + 3] / 255;
+          resultData[i * 4]     = Math.round(originalCropPixels[i * 4] * (1 - alpha) + smoothed[i * 4] * alpha);
+          resultData[i * 4 + 1] = Math.round(originalCropPixels[i * 4 + 1] * (1 - alpha) + smoothed[i * 4 + 1] * alpha);
+          resultData[i * 4 + 2] = Math.round(originalCropPixels[i * 4 + 2] * (1 - alpha) + smoothed[i * 4 + 2] * alpha);
+          resultData[i * 4 + 3] = 255;
         }
 
-        // Write the blended crop back onto the main canvas
-        ctx.putImageData(cropImgData, minX, minY);
+        ctx.putImageData(new ImageData(resultData, cropW, cropH), minX, minY);
 
-        // Update the original image reference so future operations build on this result
         const updatedImg = new Image();
         updatedImg.onload = () => {
           originalImageRef.current = updatedImg;
