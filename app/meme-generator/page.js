@@ -42,7 +42,7 @@ export default function MemeGeneratorPage() {
 
   // Dragging states
   const [topPos, setTopPos] = useState({ x: 0.5, y: 0.12 }); // relative (0 to 1)
-  const [bottomPos, setBottomPos] = useState({ x: 0.5, y: 0.88 }); // relative (0 to 1)
+  const [bottomPos, setBottomPos] = useState({ x: 0.5, y: 0.85 }); // relative (0 to 1)
   const [draggingItem, setDraggingItem] = useState(null); // 'top' | 'bottom' | null
 
   // Templates states
@@ -75,11 +75,11 @@ export default function MemeGeneratorPage() {
     if (selectedList.length > 0) {
       setFile(selectedList[0]);
       setTopPos({ x: 0.5, y: 0.12 });
-      setBottomPos({ x: 0.5, y: 0.88 });
+      setBottomPos({ x: 0.5, y: 0.85 });
     } else {
       setFile(null);
       setTopPos({ x: 0.5, y: 0.12 });
-      setBottomPos({ x: 0.5, y: 0.88 });
+      setBottomPos({ x: 0.5, y: 0.85 });
     }
     setErrorMsg('');
   };
@@ -93,11 +93,11 @@ export default function MemeGeneratorPage() {
       isTemplate: true
     });
     setTopPos({ x: 0.5, y: 0.12 });
-    setBottomPos({ x: 0.5, y: 0.88 });
+    setBottomPos({ x: 0.5, y: 0.85 });
     setErrorMsg('');
   };
 
-  // Re-draw canvas whenever variables change
+  // Re-draw canvas whenever base image changes
   useEffect(() => {
     if (!file || !canvasRef.current) return;
 
@@ -116,46 +116,11 @@ export default function MemeGeneratorPage() {
 
       // Draw background image
       ctx.drawImage(img, 0, 0);
-
-      // Set font styles
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#FFFFFF';
-      ctx.strokeStyle = '#000000';
-      ctx.lineJoin = 'round';
-
-      const tText = allCaps ? topText.toUpperCase() : topText;
-      const bText = allCaps ? bottomText.toUpperCase() : bottomText;
-
-      // Draw Top Text
-      if (tText) {
-        const topSize = Math.round(w * (topFontSize / 500));
-        ctx.font = `900 ${topSize}px Impact, Arial Black, sans-serif`;
-        ctx.lineWidth = Math.max(2, Math.round(topSize * (strokeWidth / 40)));
-        
-        const tx = topPos.x !== null ? topPos.x * w : w / 2;
-        const ty = topPos.y !== null ? topPos.y * h : h * 0.15;
-        
-        ctx.strokeText(tText, tx, ty);
-        ctx.fillText(tText, tx, ty);
-      }
-
-      // Draw Bottom Text
-      if (bText) {
-        const bottomSize = Math.round(w * (bottomFontSize / 500));
-        ctx.font = `900 ${bottomSize}px Impact, Arial Black, sans-serif`;
-        ctx.lineWidth = Math.max(2, Math.round(bottomSize * (strokeWidth / 40)));
-
-        const bx = bottomPos.x !== null ? bottomPos.x * w : w / 2;
-        const by = bottomPos.y !== null ? bottomPos.y * h : h * 0.85;
-
-        ctx.strokeText(bText, bx, by);
-        ctx.fillText(bText, bx, by);
-      }
     };
     img.src = file.preview || URL.createObjectURL(file);
-  }, [file, topText, bottomText, topFontSize, bottomFontSize, strokeWidth, allCaps, topPos, bottomPos]);
+  }, [file]);
 
-  // Handle Drag & Drop on canvas
+  // Handle Drag & Drop on canvas container
   const getCanvasMousePos = (e) => {
     if (!canvasRef.current) return { x: 0, y: 0 };
     const canvas = canvasRef.current;
@@ -189,21 +154,80 @@ export default function MemeGeneratorPage() {
     setDraggingItem(null);
   };
 
+  // Draw text on the canvas right before saving
   const downloadMeme = () => {
     if (!canvasRef.current || !file) return;
     setIsProcessing(true);
-    canvasRef.current.toBlob((blob) => {
-      if (blob) {
-        const ext = file.isTemplate ? 'jpg' : (file.name.split('.').pop() || 'jpg');
-        const baseName = file.name.replace(/\.[^/.]+$/, '');
-        const newName = `${baseName}_meme.${ext}`;
-        saveAs(blob, newName);
-        saveHistory('Meme Generator', newName);
-      } else {
-        setErrorMsg('Could not export canvas.');
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const w = img.naturalWidth || img.width;
+      const h = img.naturalHeight || img.height;
+      canvas.width = w;
+      canvas.height = h;
+
+      // Draw background image
+      ctx.drawImage(img, 0, 0);
+
+      // Set font styles
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#FFFFFF';
+      ctx.strokeStyle = '#000000';
+      ctx.lineJoin = 'round';
+      ctx.textBaseline = 'middle';
+
+      const tText = allCaps ? topText.toUpperCase() : topText;
+      const bText = allCaps ? bottomText.toUpperCase() : bottomText;
+
+      // Draw Top Text
+      if (tText) {
+        const topSize = Math.round(w * (topFontSize / 500));
+        ctx.font = `900 ${topSize}px Impact, Arial Black, sans-serif`;
+        ctx.lineWidth = Math.max(2, Math.round(topSize * (strokeWidth / 40)));
+        
+        const tx = topPos.x * w;
+        const ty = topPos.y * h;
+        
+        ctx.strokeText(tText, tx, ty);
+        ctx.fillText(tText, tx, ty);
       }
-      setIsProcessing(false);
-    }, 'image/jpeg', 0.95);
+
+      // Draw Bottom Text
+      if (bText) {
+        const bottomSize = Math.round(w * (bottomFontSize / 500));
+        ctx.font = `900 ${bottomSize}px Impact, Arial Black, sans-serif`;
+        ctx.lineWidth = Math.max(2, Math.round(bottomSize * (strokeWidth / 40)));
+
+        const bx = bottomPos.x * w;
+        const by = bottomPos.y * h;
+
+        ctx.strokeText(bText, bx, by);
+        ctx.fillText(bText, bx, by);
+      }
+
+      // Convert to blob and trigger download
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const ext = file.isTemplate ? 'jpg' : (file.name.split('.').pop() || 'jpg');
+          const baseName = file.name.replace(/\.[^/.]+$/, '');
+          const newName = `${baseName}_meme.${ext}`;
+          saveAs(blob, newName);
+          saveHistory('Meme Generator', newName);
+        } else {
+          setErrorMsg('Could not export canvas.');
+        }
+        
+        // Restore canvas to no-text state for preview editor
+        ctx.clearRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0);
+        setIsProcessing(false);
+      }, 'image/jpeg', 0.95);
+    };
+    img.src = file.preview || URL.createObjectURL(file);
   };
 
   const formatSize = (bytes) => {
@@ -213,6 +237,8 @@ export default function MemeGeneratorPage() {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
+
+  const textShadowStyle = '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, -1px -2px 0 #000, 1px -2px 0 #000, -1px 2px 0 #000, 1px 2px 0 #000, -2px -1px 0 #000, 2px -1px 0 #000, -2px 1px 0 #000, 2px 1px 0 #000';
 
   return (
     <ToolPageShell
@@ -296,7 +322,6 @@ export default function MemeGeneratorPage() {
                 {/* Templates from Imgflip */}
                 {templates
                   .filter(m => m.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                  .slice(0, 47)
                   .map(meme => (
                     <div
                       key={meme.id}
@@ -359,194 +384,246 @@ export default function MemeGeneratorPage() {
             </div>
 
             {/* Middle Column: Meme Canvas */}
-            <div className="lg:col-span-6" style={{ background: "#fff", border: "1px solid #E4E4EF", borderRadius: 20, padding: "24px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)", display: "flex", flexDirection: "column", gap: 14 }}>
-              <div className="flex justify-between items-center">
-                <h4 style={{ fontSize: 10, fontWeight: 800, color: "#9898B5", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                  Live Editor
-                </h4>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <input
-                    type="checkbox"
-                    id="allCaps"
-                    checked={allCaps}
-                    onChange={(e) => setAllCaps(e.target.checked)}
-                    style={{ width: 14, height: 14, accentColor: '#5B5BD6' }}
-                  />
-                  <label htmlFor="allCaps" className="text-xs font-bold text-textmain select-none cursor-pointer">
-                    ALL CAPS
-                  </label>
+            <div className="lg:col-span-6" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ background: "#fff", border: "1px solid #E4E4EF", borderRadius: 20, padding: "24px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)", display: "flex", flexDirection: "column", gap: 14 }}>
+                <div className="flex justify-between items-center">
+                  <h4 style={{ fontSize: 10, fontWeight: 800, color: "#9898B5", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                    Live Editor
+                  </h4>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <input
+                      type="checkbox"
+                      id="allCaps"
+                      checked={allCaps}
+                      onChange={(e) => setAllCaps(e.target.checked)}
+                      style={{ width: 14, height: 14, accentColor: '#5B5BD6' }}
+                    />
+                    <label htmlFor="allCaps" className="text-xs font-bold text-textmain select-none cursor-pointer">
+                      ALL CAPS
+                    </label>
+                  </div>
+                </div>
+
+                <div 
+                  ref={containerRef}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={handleMouseUp}
+                  onTouchMove={handleMouseMove}
+                  onTouchEnd={handleMouseUp}
+                  style={{ 
+                    border: "1.5px solid #E4E4EF", 
+                    borderRadius: 14, 
+                    padding: 12, 
+                    minHeight: 380, 
+                    display: "flex", 
+                    alignItems: "center", 
+                    justifyContent: "center", 
+                    position: "relative", 
+                    overflow: "hidden", 
+                    background: "repeating-conic-gradient(#F1F1F7 0% 25%, #fff 0% 50%) 0 0 / 16px 16px",
+                    cursor: draggingItem ? 'grabbing' : 'auto'
+                  }}
+                >
+                  <div style={{ position: 'relative', display: 'inline-block' }}>
+                    <canvas
+                      ref={canvasRef}
+                      style={{ 
+                        maxHeight: 480, 
+                        maxWidth: "100%", 
+                        objectFit: "contain", 
+                        borderRadius: 8, 
+                        boxShadow: "0 4px 20px rgba(0,0,0,0.08)", 
+                        display: "block" 
+                      }}
+                    />
+                    
+                    {/* Interactive Text Overlay (HTML only, no double render) */}
+                    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+                      
+                      {/* Top Caption Input */}
+                      <div
+                        style={{
+                          position: 'absolute',
+                          left: `${(topPos.x ?? 0.5) * 100}%`,
+                          top: `${(topPos.y ?? 0.15) * 100}%`,
+                          transform: 'translate(-50%, -50%)',
+                          pointerEvents: 'auto',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          zIndex: 10,
+                          width: '80%',
+                          maxWidth: '400px'
+                        }}
+                      >
+                        {/* Drag Handle */}
+                        <div
+                          style={{
+                            cursor: 'grab',
+                            background: '#5B5BD6',
+                            color: '#fff',
+                            borderRadius: '50%',
+                            width: 20,
+                            height: 20,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+                            marginBottom: 4,
+                            opacity: 0.9,
+                            transition: 'opacity 0.2s',
+                          }}
+                          onMouseDown={(e) => { e.stopPropagation(); setDraggingItem('top'); }}
+                          onTouchStart={(e) => { e.stopPropagation(); setDraggingItem('top'); }}
+                          onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.9'; }}
+                        >
+                          <svg width="10" height="10" fill="none" stroke="currentColor" strokeWidth="3.5" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
+                          </svg>
+                        </div>
+                        <input
+                          type="text"
+                          value={topText}
+                          onChange={(e) => setTopText(e.target.value)}
+                          style={{
+                            background: 'transparent',
+                            border: '1.5px dashed rgba(255,255,255,0.4)',
+                            outline: 'none',
+                            color: '#ffffff',
+                            fontFamily: 'Impact, Arial Black, sans-serif',
+                            fontSize: `calc(${topFontSize}px * 0.35)`,
+                            textAlign: 'center',
+                            textTransform: allCaps ? 'uppercase' : 'none',
+                            textShadow: textShadowStyle,
+                            width: '100%',
+                            minWidth: '150px',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            boxSizing: 'border-box',
+                            transition: 'border-color 0.15s'
+                          }}
+                          onFocus={(e) => { e.target.style.borderColor = '#5B5BD6'; }}
+                          onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.4)'; }}
+                        />
+                      </div>
+
+                      {/* Bottom Caption Input */}
+                      <div
+                        style={{
+                          position: 'absolute',
+                          left: `${(bottomPos.x ?? 0.5) * 100}%`,
+                          top: `${(bottomPos.y ?? 0.85) * 100}%`,
+                          transform: 'translate(-50%, -50%)',
+                          pointerEvents: 'auto',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          zIndex: 10,
+                          width: '80%',
+                          maxWidth: '400px'
+                        }}
+                      >
+                        {/* Drag Handle */}
+                        <div
+                          style={{
+                            cursor: 'grab',
+                            background: '#5B5BD6',
+                            color: '#fff',
+                            borderRadius: '50%',
+                            width: 20,
+                            height: 20,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+                            marginBottom: 4,
+                            opacity: 0.9,
+                            transition: 'opacity 0.2s',
+                          }}
+                          onMouseDown={(e) => { e.stopPropagation(); setDraggingItem('bottom'); }}
+                          onTouchStart={(e) => { e.stopPropagation(); setDraggingItem('bottom'); }}
+                          onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.9'; }}
+                        >
+                          <svg width="10" height="10" fill="none" stroke="currentColor" strokeWidth="3.5" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
+                          </svg>
+                        </div>
+                        <input
+                          type="text"
+                          value={bottomText}
+                          onChange={(e) => setBottomText(e.target.value)}
+                          style={{
+                            background: 'transparent',
+                            border: '1.5px dashed rgba(255,255,255,0.4)',
+                            outline: 'none',
+                            color: '#ffffff',
+                            fontFamily: 'Impact, Arial Black, sans-serif',
+                            fontSize: `calc(${bottomFontSize}px * 0.35)`,
+                            textAlign: 'center',
+                            textTransform: allCaps ? 'uppercase' : 'none',
+                            textShadow: textShadowStyle,
+                            width: '100%',
+                            minWidth: '150px',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            boxSizing: 'border-box',
+                            transition: 'border-color 0.15s'
+                          }}
+                          onFocus={(e) => { e.target.style.borderColor = '#5B5BD6'; }}
+                          onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.4)'; }}
+                        />
+                      </div>
+
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div 
-                ref={containerRef}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
-                onTouchMove={handleMouseMove}
-                onTouchEnd={handleMouseUp}
-                style={{ 
-                  border: "1.5px solid #E4E4EF", 
-                  borderRadius: 14, 
-                  padding: 12, 
-                  minHeight: 380, 
-                  display: "flex", 
-                  alignItems: "center", 
-                  justifyContent: "center", 
-                  position: "relative", 
-                  overflow: "hidden", 
-                  background: "repeating-conic-gradient(#F1F1F7 0% 25%, #fff 0% 50%) 0 0 / 16px 16px",
-                  cursor: draggingItem ? 'grabbing' : 'auto'
-                }}
-              >
-                <div style={{ position: 'relative', display: 'inline-block' }}>
-                  <canvas
-                    ref={canvasRef}
-                    style={{ 
-                      maxHeight: 480, 
-                      maxWidth: "100%", 
-                      objectFit: "contain", 
-                      borderRadius: 8, 
-                      boxShadow: "0 4px 20px rgba(0,0,0,0.08)", 
-                      display: "block" 
+              {/* Meme Templates Horizontal Carousel */}
+              <div style={{ background: "#fff", border: "1px solid #E4E4EF", borderRadius: 20, padding: "20px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)" }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <h4 style={{ fontSize: 10, fontWeight: 800, color: "#9898B5", textTransform: "uppercase", letterSpacing: "0.08em", margin: 0 }}>
+                    Switch Templates
+                  </h4>
+                  <span style={{ fontSize: 9, color: '#9898B5', fontWeight: 700 }}>Scroll for more templates →</span>
+                </div>
+                <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 8 }}>
+                  {/* Upload custom box trigger */}
+                  <div
+                    onClick={() => document.querySelector('input[type="file"]')?.click()}
+                    style={{
+                      border: '1.5px dashed #D1D1E4', borderRadius: 10, padding: 8,
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                      gap: 6, cursor: 'pointer', background: '#F7F7FB', minWidth: 90, height: 90, flexShrink: 0
                     }}
-                  />
-                  {/* Interactive Text Overlay */}
-                  <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-                    
-                    {/* Top Caption Input */}
-                    <div
-                      style={{
-                        position: 'absolute',
-                        left: `${(topPos.x ?? 0.5) * 100}%`,
-                        top: `${(topPos.y ?? 0.15) * 100}%`,
-                        transform: 'translate(-50%, -50%)',
-                        pointerEvents: 'auto',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        zIndex: 10
-                      }}
-                    >
-                      {/* Drag Handle */}
-                      <div
-                        style={{
-                          cursor: 'grab',
-                          background: '#5B5BD6',
-                          color: '#fff',
-                          borderRadius: '50%',
-                          width: 20,
-                          height: 20,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
-                          marginBottom: 4,
-                          opacity: 0.9,
-                          transition: 'opacity 0.2s',
-                        }}
-                        onMouseDown={(e) => { e.stopPropagation(); setDraggingItem('top'); }}
-                        onTouchStart={(e) => { e.stopPropagation(); setDraggingItem('top'); }}
-                        onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.9'; }}
-                      >
-                        <svg width="10" height="10" fill="none" stroke="currentColor" strokeWidth="3.5" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
-                        </svg>
-                      </div>
-                      <input
-                        type="text"
-                        value={topText}
-                        onChange={(e) => setTopText(e.target.value)}
-                        style={{
-                          background: 'transparent',
-                          border: '1.5px dashed rgba(255,255,255,0.4)',
-                          outline: 'none',
-                          color: '#ffffff',
-                          fontFamily: 'Impact, Arial Black, sans-serif',
-                          fontSize: `calc(${topFontSize}px * 0.35)`,
-                          textAlign: 'center',
-                          textTransform: allCaps ? 'uppercase' : 'none',
-                          textShadow: '2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 0 2px 0 #000, 0 -2px 0 #000, 2px 0 0 #000, -2px 0 0 #000',
-                          width: 'max-content',
-                          minWidth: '150px',
-                          padding: '2px 6px',
-                          borderRadius: '4px',
-                          boxSizing: 'border-box',
-                          transition: 'border-color 0.15s'
-                        }}
-                        onFocus={(e) => { e.target.style.borderColor = '#5B5BD6'; }}
-                        onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.4)'; }}
-                      />
-                    </div>
-
-                    {/* Bottom Caption Input */}
-                    <div
-                      style={{
-                        position: 'absolute',
-                        left: `${(bottomPos.x ?? 0.5) * 100}%`,
-                        top: `${(bottomPos.y ?? 0.85) * 100}%`,
-                        transform: 'translate(-50%, -50%)',
-                        pointerEvents: 'auto',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        zIndex: 10
-                      }}
-                    >
-                      {/* Drag Handle */}
-                      <div
-                        style={{
-                          cursor: 'grab',
-                          background: '#5B5BD6',
-                          color: '#fff',
-                          borderRadius: '50%',
-                          width: 20,
-                          height: 20,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
-                          marginBottom: 4,
-                          opacity: 0.9,
-                          transition: 'opacity 0.2s',
-                        }}
-                        onMouseDown={(e) => { e.stopPropagation(); setDraggingItem('bottom'); }}
-                        onTouchStart={(e) => { e.stopPropagation(); setDraggingItem('bottom'); }}
-                        onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.9'; }}
-                      >
-                        <svg width="10" height="10" fill="none" stroke="currentColor" strokeWidth="3.5" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
-                        </svg>
-                      </div>
-                      <input
-                        type="text"
-                        value={bottomText}
-                        onChange={(e) => setBottomText(e.target.value)}
-                        style={{
-                          background: 'transparent',
-                          border: '1.5px dashed rgba(255,255,255,0.4)',
-                          outline: 'none',
-                          color: '#ffffff',
-                          fontFamily: 'Impact, Arial Black, sans-serif',
-                          fontSize: `calc(${bottomFontSize}px * 0.35)`,
-                          textAlign: 'center',
-                          textTransform: allCaps ? 'uppercase' : 'none',
-                          textShadow: '2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 0 2px 0 #000, 0 -2px 0 #000, 2px 0 0 #000, -2px 0 0 #000',
-                          width: 'max-content',
-                          minWidth: '150px',
-                          padding: '2px 6px',
-                          borderRadius: '4px',
-                          boxSizing: 'border-box',
-                          transition: 'border-color 0.15s'
-                        }}
-                        onFocus={(e) => { e.target.style.borderColor = '#5B5BD6'; }}
-                        onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.4)'; }}
-                      />
-                    </div>
-
+                  >
+                    <svg width="16" height="16" fill="none" stroke="#5B5BD6" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
+                    <span style={{ fontSize: 8, fontWeight: 800, color: '#5B5BD6', textAlign: 'center' }}>Upload Custom</span>
                   </div>
+
+                  {/* API templates */}
+                  {templates.map(meme => (
+                    <div
+                      key={meme.id}
+                      onClick={() => selectTemplate(meme)}
+                      style={{
+                        width: 90, height: 90, borderRadius: 10, overflow: 'hidden',
+                        border: `2px solid ${file.preview === meme.url ? '#5B5BD6' : '#E4E4EF'}`,
+                        cursor: 'pointer', position: 'relative', flexShrink: 0, background: '#F7F7FB',
+                        transition: 'all 0.15s'
+                      }}
+                      onMouseEnter={e => { if (file.preview !== meme.url) e.currentTarget.style.borderColor = '#9898B5'; }}
+                      onMouseLeave={e => { if (file.preview !== meme.url) e.currentTarget.style.borderColor = '#E4E4EF'; }}
+                    >
+                      <img src={meme.url} alt={meme.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.65)', padding: '2px 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 8, color: '#fff', textAlign: 'center' }}>
+                        {meme.name}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -636,7 +713,7 @@ export default function MemeGeneratorPage() {
                   type="button"
                   onClick={downloadMeme}
                   disabled={isProcessing}
-                  style={{ width: "100%", padding: "13px", fontSize: 13, fontWeight: 800, borderRadius: 12, border: "none", cursor: "pointer", background: "linear-gradient(135deg, #5B5BD6 0%, #7C3AED 100%)", color: "#fff", boxShadow: "0 4px 14px rgba(91,91,214,0.30)", display: "flex", alignItems: "center", justifyCenter: "center", gap: 8, transition: "all 0.18s" }}
+                  style={{ width: "100%", padding: "13px", fontSize: 13, fontWeight: 800, borderRadius: 12, border: "none", cursor: "pointer", background: "linear-gradient(135deg, #5B5BD6 0%, #7C3AED 100%)", color: "#fff", boxShadow: "0 4px 14px rgba(91,91,214,0.30)", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "all 0.18s" }}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
