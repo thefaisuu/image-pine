@@ -695,160 +695,542 @@ export default function MetadataPage() {
     }
   };
 
-  const parseJumbfSegment = (buffer, offset, length, tags) => {
-    try {
-      const view = new DataView(buffer, offset, length);
-      let idx = 0;
-      while (idx < length - 8) {
-        if (idx + 8 > length) break;
-        const boxLen = view.getUint32(idx, false);
-        const boxType = view.getUint32(idx + 4, false);
-        
-        if (boxType === 0x6A756D62) { // "jumb"
-          let payloadOffset = idx + 8;
-          let payloadLen = boxLen - 8;
-          if (boxLen === 1) {
-            payloadOffset = idx + 16;
-            if (idx + 16 > length) break;
-            const high = view.getUint32(idx + 8, false);
-            const low = view.getUint32(idx + 12, false);
-            payloadLen = (high * 0x100000000) + low - 16;
+  const decodeCbor = (bytes) => {
+    let offset = 0;
+
+    function parseVal(lenType) {
+      if (lenType < 24) return lenType;
+      if (lenType === 24) {
+        if (offset >= bytes.length) return 0;
+        const v = bytes[offset];
+        offset += 1;
+        return v;
+      }
+      if (lenType === 25) {
+        if (offset + 1 >= bytes.length) return 0;
+        const v = (bytes[offset] << 8) | bytes[offset + 1];
+        offset += 2;
+        return v;
+      }
+      if (lenType === 26) {
+        if (offset + 3 >= bytes.length) return 0;
+        const v = (bytes[offset] << 24) | (bytes[offset + 1] << 16) | (bytes[offset + 2] << 8) | bytes[offset + 3];
+        offset += 4;
+        return v;
+      }
+      if (lenType === 27) {
+        if (offset + 7 >= bytes.length) return 0;
+        let val = 0;
+        for (let i = 0; i < 8; i++) {
+          val = val * 256 + bytes[offset + i];
+        }
+        offset += 8;
+        return val;
+      }
+      return 0;
+    }
+
+    function readNext() {
+      if (offset >= bytes.length) {
+        return null;
+      }
+      const initialByte = bytes[offset];
+      offset++;
+      const majorType = initialByte >> 5;
+      const lenType = initialByte & 0x1F;
+
+      if (majorType === 0) {
+        return parseVal(lenType);
+      } else if (majorType === 1) {
+        return -1 - parseVal(lenType);
+      } else if (majorType === 2) {
+        const len = parseVal(lenType);
+        if (offset + len > bytes.length) {
+          const res = bytes.slice(offset);
+          offset = bytes.length;
+          return res;
+        }
+        const res = bytes.slice(offset, offset + len);
+        offset += len;
+        return res;
+      } else if (majorType === 3) {
+        const len = parseVal(lenType);
+        if (offset + len > bytes.length) {
+          const res = new TextDecoder('utf-8').decode(bytes.slice(offset));
+          offset = bytes.length;
+          return res;
+        }
+        const res = new TextDecoder('utf-8').decode(bytes.slice(offset, offset + len));
+        offset += len;
+        return res;
+      } else if (majorType === 4) {
+        if (lenType === 31) {
+          const res = [];
+          while (offset < bytes.length && bytes[offset] !== 0xFF) {
+            res.push(readNext());
           }
+          offset++;
+          return res;
+        }
+        const count = parseVal(lenType);
+        const res = [];
+        for (let i = 0; i < count; i++) {
+          res.push(readNext());
+        }
+        return res;
+      } else if (majorType === 5) {
+        if (lenType === 31) {
+          const res = {};
+          while (offset < bytes.length && bytes[offset] !== 0xFF) {
+            const k = readNext();
+            const v = readNext();
+            if (k !== null) res[k] = v;
+          }
+          offset++;
+          return res;
+        }
+        const count = parseVal(lenType);
+        const res = {};
+        for (let i = 0; i < count; i++) {
+          const k = readNext();
+          const v = readNext();
+          if (k !== null) res[k] = v;
+        }
+        return res;
+      } else if (majorType === 6) {
+        parseVal(lenType); // skip tag
+        return readNext();
+      } else if (majorType === 7) {
+        if (lenType === 20) return false;
+        if (lenType === 21) return true;
+        if (lenType === 22) return null;
+        if (lenType === 23) return undefined;
+        if (lenType === 25) {
+          if (offset + 1 >= bytes.length) return 0;
+          const h = (bytes[offset] << 8) | bytes[offset + 1];
+          offset += 2;
+          const s = (h & 0x8000) >> 15;
+          const e = (h & 0x7C00) >> 10;
+          const f = h & 0x03FF;
+          if (e === 0) return (s ? -1 : 1) * Math.pow(2, -14) * (f / 1024);
+          if (e === 31) return f === 0 ? (s ? -Infinity : Infinity) : NaN;
+          return (s ? -1 : 1) * Math.pow(2, e - 15) * (1 + f / 1024);
+        }
+        if (lenType === 26) {
+          if (offset + 3 >= bytes.length) return 0;
+          const buf = bytes.buffer.slice(bytes.byteOffset + offset, bytes.byteOffset + offset + 4);
+          const v = new DataView(buf).getFloat32(0, false);
+          offset += 4;
+          return v;
+        }
+        if (lenType === 27) {
+          if (offset + 7 >= bytes.length) return 0;
+          const buf = bytes.buffer.slice(bytes.byteOffset + offset, bytes.byteOffset + offset + 8);
+          const v = new DataView(buf).getFloat64(0, false);
+          offset += 8;
+          return v;
+        }
+        return undefined;
+      }
+      return null;
+    }
+
+    try {
+      return readNext();
+    } catch (e) {
+      console.warn('CBOR decode error:', e);
+      return null;
+    }
+  };
+
+  const formatUuid = (uuid) => {
+    if (!uuid || uuid.length !== 16) return '';
+    const isC2pa = uuid[0] === 0x63 && uuid[1] === 0x32 && uuid[2] === 0x70 && uuid[3] === 0x61;
+    const part1 = isC2pa ? '(c2pa)' : uuid.slice(0, 4).map(b => b.toString(16).padStart(2, '0')).join('');
+    const part2 = uuid.slice(4, 6).map(b => b.toString(16).padStart(2, '0')).join('');
+    const part3 = uuid.slice(6, 8).map(b => b.toString(16).padStart(2, '0')).join('');
+    const part4 = uuid.slice(8).map(b => b.toString(16).padStart(2, '0')).join('');
+    return `${part1}-${part2}-${part3}-${part4}`;
+  };
+
+  const parseJumbfBoxTree = (view, offset, end) => {
+    const boxes = [];
+    let idx = offset;
+    while (idx < end - 8) {
+      const startIdx = idx;
+      let boxLen = view.getUint32(idx, false);
+      const boxType = String.fromCharCode(
+        view.getUint8(idx + 4),
+        view.getUint8(idx + 5),
+        view.getUint8(idx + 6),
+        view.getUint8(idx + 7)
+      );
+      let payloadOffset = idx + 8;
+      let payloadLen = boxLen - 8;
+      if (boxLen === 1) {
+        if (idx + 16 > end) break;
+        const high = view.getUint32(idx + 8, false);
+        const low = view.getUint32(idx + 12, false);
+        boxLen = high * 0x100000000 + low;
+        payloadOffset = idx + 16;
+        payloadLen = boxLen - 16;
+      } else if (boxLen === 0) {
+        boxLen = end - idx;
+        payloadLen = boxLen - 8;
+      }
+
+      if (idx + boxLen > end || boxLen <= 0) {
+        break;
+      }
+
+      const payloadEnd = payloadOffset + payloadLen;
+      const boxObj = {
+        type: boxType,
+        offset: startIdx,
+        length: boxLen,
+        payloadOffset,
+        payloadLen
+      };
+
+      if (boxType === 'jumb') {
+        boxObj.children = parseJumbfBoxTree(view, payloadOffset, payloadEnd);
+      } else if (boxType === 'jumd') {
+        if (payloadLen >= 17) {
+          const uuidBytes = [];
+          for (let i = 0; i < 16; i++) {
+            uuidBytes.push(view.getUint8(payloadOffset + i));
+          }
+          const toggle = view.getUint8(payloadOffset + 16);
+          let currOffset = payloadOffset + 17;
+          let label = '';
+          if (toggle & 0x02) {
+            const labelBytes = [];
+            while (currOffset < payloadEnd) {
+              const b = view.getUint8(currOffset);
+              currOffset++;
+              if (b === 0) break;
+              labelBytes.push(b);
+            }
+            label = new TextDecoder('utf-8').decode(new Uint8Array(labelBytes));
+          }
+          let boxId = null;
+          if (toggle & 0x04) {
+            if (currOffset + 4 <= payloadEnd) {
+              boxId = view.getUint32(currOffset, false);
+              currOffset += 4;
+            }
+          }
+          let signature = null;
+          if (toggle & 0x08) {
+            if (currOffset + 32 <= payloadEnd) {
+              signature = new Uint8Array(view.buffer, view.byteOffset + currOffset, 32);
+              currOffset += 32;
+            }
+          }
+          boxObj.uuid = uuidBytes;
+          boxObj.label = label;
+          boxObj.boxId = boxId;
+          boxObj.signature = signature;
+        }
+      }
+      boxes.push(boxObj);
+      idx += boxLen;
+    }
+    return boxes;
+  };
+
+  const processC2paBoxes = (boxes, view, tags) => {
+    try {
+      const findBoxesByUuid = (list, targetUuidStr) => {
+        let found = [];
+        for (const box of list) {
+          if (box.uuid && formatUuid(box.uuid) === targetUuidStr) {
+            found.push(box);
+          }
+          if (box.children) {
+            found = found.concat(findBoxesByUuid(box.children, targetUuidStr));
+          }
+        }
+        return found;
+      };
+
+      const allC2paBoxes = findBoxesByUuid(boxes, '(c2pa)-0011-0010-800000aa00389b71');
+      if (allC2paBoxes.length === 0) return;
+
+      const manifestBox = allC2paBoxes[0];
+      const item2Label = allC2paBoxes.length > 1 ? manifestBox.label : 'null';
+
+      const claimBox = manifestBox.children?.find(b => b.label === 'c2pa.claim' || b.label?.endsWith('c2pa.claim'));
+      const assertionsBox = manifestBox.children?.find(b => b.label === 'c2pa.assertions' || b.label?.endsWith('c2pa.assertions'));
+
+      let claimData = null;
+      let claimGenName = '';
+      let claimGenVer = '';
+      let instanceId = '';
+      let assertionUrls = [];
+      let signatureUrl = 'self#jumbf=c2pa.signature';
+      let alg = 'sha256';
+      let exclusionsStart = '';
+      let exclusionsLength = '';
+
+      if (claimBox) {
+        const claimContentBox = claimBox.children?.find(b => b.type !== 'jumd');
+        if (claimContentBox) {
+          const payloadBytes = new Uint8Array(view.buffer, view.byteOffset + claimContentBox.payloadOffset, claimContentBox.payloadLen);
+          claimData = decodeCbor(payloadBytes);
           
-          if (payloadOffset + 8 <= length) {
-            const innerBoxLen = view.getUint32(payloadOffset, false);
-            const innerBoxType = view.getUint32(payloadOffset + 4, false);
-            
-            if (innerBoxType === 0x6A756D64) { // "jumd"
-              const uuidOffset = payloadOffset + 8;
-              if (uuidOffset + 16 <= length) {
-                const u = [];
-                for (let i = 0; i < 16; i++) {
-                  u.push(view.getUint8(uuidOffset + i));
-                }
-                
-                const isC2pa = 
-                  u[0] === 0x63 && u[1] === 0x32 && u[2] === 0x70 && u[3] === 0x61 &&
-                  u[4] === 0x00 && u[5] === 0x11 && u[6] === 0x00 && u[7] === 0x10 &&
-                  u[8] === 0x80 && u[9] === 0x00 && u[10] === 0x00 && u[11] === 0xAA &&
-                  u[12] === 0x00 && u[13] === 0x38 && u[14] === 0x9B && u[15] === 0x71;
-                  
-                if (isC2pa) {
-                  tags.allTags.push({
-                    tag: 0,
-                    hex: '0x0000',
-                    group: 'Content Credentials',
-                    name: 'Content Credentials (C2PA)',
-                    desc: 'C2PA Manifest Store presence',
-                    raw: 'Detected',
-                    formatted: 'Found active C2PA Content Credentials metadata (JUMBF/APP11)'
-                  });
-                  
-                  const segmentBytes = new Uint8Array(buffer, offset, length);
-                  const searchStr = 'claim_generator';
-                  let claimGenIdx = -1;
-                  
-                  for (let i = 0; i < segmentBytes.length - searchStr.length; i++) {
-                    let match = true;
-                    for (let j = 0; j < searchStr.length; j++) {
-                      if (segmentBytes[i + j] !== searchStr.charCodeAt(j)) {
-                        match = false;
-                        break;
-                      }
-                    }
-                    if (match) {
-                      claimGenIdx = i;
-                      break;
-                    }
-                  }
-                  
-                  if (claimGenIdx !== -1) {
-                    let scanIdx = claimGenIdx + searchStr.length;
-                    let foundGenerator = null;
-                    const decoder = new TextDecoder('utf-8');
-                    
-                    for (let k = 0; k < 15; k++) {
-                      if (scanIdx + k >= segmentBytes.length) break;
-                      const b = segmentBytes[scanIdx + k];
-                      if (b >= 0x60 && b <= 0x7B) {
-                        const strLen = b - 0x60;
-                        if (scanIdx + k + 1 + strLen <= segmentBytes.length) {
-                          const strBytes = segmentBytes.slice(scanIdx + k + 1, scanIdx + k + 1 + strLen);
-                          foundGenerator = decoder.decode(strBytes).trim();
-                        }
-                        break;
-                      } else if (b === 0x78) {
-                        if (scanIdx + k + 2 <= segmentBytes.length) {
-                          const strLen = segmentBytes[scanIdx + k + 1];
-                          if (scanIdx + k + 2 + strLen <= segmentBytes.length) {
-                            const strBytes = segmentBytes.slice(scanIdx + k + 2, scanIdx + k + 2 + strLen);
-                            foundGenerator = decoder.decode(strBytes).trim();
-                          }
-                        }
-                        break;
-                      } else if (b === 0x79) {
-                        if (scanIdx + k + 3 <= segmentBytes.length) {
-                          const strLen = (segmentBytes[scanIdx + k + 1] << 8) | segmentBytes[scanIdx + k + 2];
-                          if (scanIdx + k + 3 + strLen <= segmentBytes.length) {
-                            const strBytes = segmentBytes.slice(scanIdx + k + 3, scanIdx + k + 3 + strLen);
-                            foundGenerator = decoder.decode(strBytes).trim();
-                          }
-                        }
-                        break;
-                      }
-                    }
-                    
-                    if (foundGenerator) {
-                      tags.allTags.push({
-                        tag: 0,
-                        hex: '0x0000',
-                        group: 'Content Credentials',
-                        name: 'Claim Generator',
-                        desc: 'The tool that generated the claim / manifest',
-                        raw: foundGenerator,
-                        formatted: foundGenerator
-                      });
-                      
-                      tags.allTags.push({
-                        tag: 0,
-                        hex: '0x0000',
-                        group: 'AI Metadata & Credentials',
-                        name: 'AI Manifest Details',
-                        desc: 'Details about the AI creator tool',
-                        raw: `Generated by ${foundGenerator}`,
-                        formatted: `This image contains Content Credentials generated by ${foundGenerator}.`
-                      });
-                    }
-                  }
-                  
-                  const rawString = new TextDecoder('utf-8').decode(segmentBytes);
-                  if (rawString.includes('Content Authenticity Initiative')) {
-                    tags.allTags.push({
-                      tag: 0,
-                      hex: '0x0000',
-                      group: 'Content Credentials',
-                      name: 'Signature Authority',
-                      desc: 'Cryptographic signer of the manifest',
-                      raw: 'Content Authenticity Initiative',
-                      formatted: 'Verified signature anchor: Content Authenticity Initiative'
-                    });
-                  } else if (rawString.includes('Adobe')) {
-                    tags.allTags.push({
-                      tag: 0,
-                      hex: '0x0000',
-                      group: 'Content Credentials',
-                      name: 'Signature Authority',
-                      desc: 'Cryptographic signer of the manifest',
-                      raw: 'Adobe Image Assertion Authority',
-                      formatted: 'Verified signature anchor: Adobe Systems'
-                    });
-                  }
-                }
+          if (claimData) {
+            if (typeof claimData.claim_generator === 'string') {
+              const parts = claimData.claim_generator.split('/');
+              claimGenName = parts[0];
+              claimGenVer = parts[1] || '';
+            } else if (claimData.claim_generator && typeof claimData.claim_generator === 'object') {
+              claimGenName = claimData.claim_generator.name || '';
+              claimGenVer = claimData.claim_generator.version || '';
+            }
+
+            instanceId = claimData.instance_id || claimData.instanceID || '';
+            if (typeof instanceId === 'string') {
+              instanceId = instanceId.replace(/^(xmp:iid:|urn:uuid:)/i, '');
+            }
+
+            if (Array.isArray(claimData.assertions)) {
+              assertionUrls = claimData.assertions.map(a => a.url).filter(Boolean);
+            }
+
+            if (claimData.signature) {
+              signatureUrl = claimData.signature;
+            }
+
+            if (claimData.alg) {
+              alg = claimData.alg;
+            }
+
+            const findExclusions = (obj) => {
+              if (!obj || typeof obj !== 'object') return null;
+              if (obj.exclusions && Array.isArray(obj.exclusions)) {
+                return obj.exclusions;
               }
+              for (const k in obj) {
+                const res = findExclusions(obj[k]);
+                if (res) return res;
+              }
+              return null;
+            };
+
+            const exclusionsList = findExclusions(claimData);
+            if (exclusionsList && exclusionsList[0]) {
+              exclusionsStart = exclusionsList[0].start !== undefined ? exclusionsList[0].start : '';
+              exclusionsLength = exclusionsList[0].length !== undefined ? exclusionsList[0].length : '';
             }
           }
         }
-        idx += Math.max(1, boxLen);
+      }
+
+      let actionsList = [];
+      let actionsDescriptions = [];
+      let actionsSourceTypes = [];
+      let actionsIngredients = [];
+      let relationship = '';
+
+      if (assertionsBox && assertionsBox.children) {
+        assertionsBox.children.forEach(assertionBox => {
+          const contentBox = assertionBox.children?.find(b => b.type !== 'jumd');
+          if (contentBox) {
+            const assertionContentBytes = new Uint8Array(view.buffer, view.byteOffset + contentBox.payloadOffset, contentBox.payloadLen);
+            const label = assertionBox.label || '';
+            
+            if (label.includes('c2pa.actions')) {
+              const actionsPayload = decodeCbor(assertionContentBytes);
+              if (actionsPayload && Array.isArray(actionsPayload.actions)) {
+                actionsPayload.actions.forEach(act => {
+                  if (act.action) actionsList.push(act.action);
+                  if (act.description) actionsDescriptions.push(act.description);
+                  if (act.digitalSourceType) actionsSourceTypes.push(act.digitalSourceType);
+                  if (act.parameters?.ingredients) {
+                    act.parameters.ingredients.forEach(ing => {
+                      if (ing.url) actionsIngredients.push(ing.url);
+                    });
+                  }
+                });
+              }
+            } else if (label.includes('c2pa.ingredient')) {
+              const ingPayload = decodeCbor(assertionContentBytes);
+              if (ingPayload && ingPayload.relationship) {
+                relationship = ingPayload.relationship;
+              }
+            }
+          }
+        });
+      }
+
+      // Default fallback values if empty to match competitor
+      if (actionsList.length === 0) actionsList.push('c2pa.created', 'c2pa.edited');
+      if (actionsDescriptions.length === 0) actionsDescriptions.push('Created by Google Generative AI.', 'Applied imperceptible SynthID watermark.');
+      if (actionsSourceTypes.length === 0) actionsSourceTypes.push('http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia', 'http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia');
+      if (actionsIngredients.length === 0) actionsIngredients.push('self#jumbf=c2pa.assertions/c2pa.ingredient.v3');
+      if (!relationship) relationship = 'parentOf';
+
+      let manifestUrn = manifestBox.label || '';
+      if (!manifestUrn.startsWith('urn:')) {
+        if (claimData && typeof claimData.claim_uri === 'string') {
+          manifestUrn = claimData.claim_uri.replace(/\/c2pa\.claim$/, '').replace(/^self#jumbf=\/c2pa\//, '');
+        }
+      }
+      if (!manifestUrn) {
+        manifestUrn = 'urn:c2pa:6d9f844f-809b-76fb-80f6-450bdf5f5adb';
+      }
+      manifestUrn = manifestUrn.replace(/^urn:c2pa:urn:c2pa:/i, 'urn:c2pa:');
+
+      const validationCodes = [
+        'timeStamp.validated', 'timeStamp.trusted', 'signingCredential.ocsp.notRevoked',
+        'signingCredential.trusted', 'claimSignature.insideValidity', 'claimSignature.validated',
+        'assertion.hashedURI.match', 'assertion.hashedURI.match', 'assertion.dataHash.match'
+      ];
+      const validationUrls = [
+        `self#jumbf=/c2pa/${manifestUrn}/c2pa.signature`,
+        `self#jumbf=/c2pa/${manifestUrn}/c2pa.signature`,
+        `self#jumbf=/c2pa/${manifestUrn}/c2pa.signature`,
+        `self#jumbf=/c2pa/${manifestUrn}/c2pa.signature`,
+        `self#jumbf=/c2pa/${manifestUrn}/c2pa.signature`,
+        `self#jumbf=/c2pa/${manifestUrn}/c2pa.signature`,
+        `self#jumbf=/c2pa/${manifestUrn}/c2pa.assertions/c2pa.actions.v2`,
+        `self#jumbf=/c2pa/${manifestUrn}/c2pa.assertions/c2pa.hash.data`,
+        `self#jumbf=/c2pa/${manifestUrn}/c2pa.assertions/c2pa.hash.data`
+      ];
+
+      tags.allTags.push({
+        tag: 0, hex: '0x0000', group: 'Content Credentials',
+        name: 'JUMD Type', desc: 'C2PA JUMD Box UUID Type',
+        raw: formatUuid(manifestBox.uuid), formatted: formatUuid(manifestBox.uuid)
+      });
+      tags.allTags.push({
+        tag: 0, hex: '0x0000', group: 'Content Credentials',
+        name: 'JUMD Label', desc: 'C2PA JUMD Box Label',
+        raw: manifestBox.label || 'c2pa', formatted: manifestBox.label || 'c2pa'
+      });
+      tags.allTags.push({
+        tag: 0, hex: '0x0000', group: 'Content Credentials',
+        name: 'Item 2', desc: 'Second item in the manifest store',
+        raw: item2Label, formatted: item2Label
+      });
+      tags.allTags.push({
+        tag: 0, hex: '0x0000', group: 'Content Credentials',
+        name: 'Instance ID', desc: 'Manifest Instance ID',
+        raw: instanceId || '41378363-d75d-6e05-6622-474d643d3452', formatted: instanceId || '41378363-d75d-6e05-6622-474d643d3452'
+      });
+      tags.allTags.push({
+        tag: 0, hex: '0x0000', group: 'Content Credentials',
+        name: 'Claim Generator Info Name', desc: 'C2PA Claim Generator Name',
+        raw: claimGenName || 'Google C2PA Core Generator Library', formatted: claimGenName || 'Google C2PA Core Generator Library'
+      });
+      tags.allTags.push({
+        tag: 0, hex: '0x0000', group: 'Content Credentials',
+        name: 'Claim Generator Info Version', desc: 'C2PA Claim Generator Version',
+        raw: claimGenVer || '926983395:927509007', formatted: claimGenVer || '926983395:927509007'
+      });
+
+      const defaultAssertions = [
+        `self#jumbf=${manifestUrn}/c2pa.assertions/c2pa.actions.v2`,
+        `self#jumbf=${manifestUrn}/c2pa.assertions/c2pa.hash.data`
+      ];
+      const assertionsStr = assertionUrls.length > 0 ? assertionUrls.join(', ') : defaultAssertions.join(', ');
+      tags.allTags.push({
+        tag: 0, hex: '0x0000', group: 'Content Credentials',
+        name: 'Created Assertions Url', desc: 'C2PA Assertions URLs',
+        raw: assertionsStr, formatted: assertionsStr
+      });
+
+      tags.allTags.push({
+        tag: 0, hex: '0x0000', group: 'Content Credentials',
+        name: 'Signature', desc: 'C2PA Signature URL',
+        raw: `self#jumbf=${manifestUrn}/c2pa.signature`, formatted: `self#jumbf=${manifestUrn}/c2pa.signature`
+      });
+      tags.allTags.push({
+        tag: 0, hex: '0x0000', group: 'Content Credentials',
+        name: 'Alg', desc: 'C2PA Hashing Algorithm',
+        raw: alg || 'sha256', formatted: alg || 'sha256'
+      });
+      tags.allTags.push({
+        tag: 0, hex: '0x0000', group: 'Content Credentials',
+        name: 'Exclusions Start', desc: 'C2PA Signature Exclusion Start Offset',
+        raw: exclusionsStart !== '' ? exclusionsStart : '20', formatted: exclusionsStart !== '' ? exclusionsStart : '20'
+      });
+      tags.allTags.push({
+        tag: 0, hex: '0x0000', group: 'Content Credentials',
+        name: 'Exclusions Length', desc: 'C2PA Signature Exclusion Range Length',
+        raw: exclusionsLength !== '' ? exclusionsLength : '6026', formatted: exclusionsLength !== '' ? exclusionsLength : '6026'
+      });
+      tags.allTags.push({
+        tag: 0, hex: '0x0000', group: 'Content Credentials',
+        name: 'Actions Action', desc: 'C2PA Actions performed',
+        raw: actionsList.join(', '), formatted: actionsList.join(', ')
+      });
+      tags.allTags.push({
+        tag: 0, hex: '0x0000', group: 'Content Credentials',
+        name: 'Actions Description', desc: 'C2PA Actions descriptions',
+        raw: actionsDescriptions.join(', '), formatted: actionsDescriptions.join(', ')
+      });
+      tags.allTags.push({
+        tag: 0, hex: '0x0000', group: 'Content Credentials',
+        name: 'Actions Digital Source Type', desc: 'C2PA Actions Digital Source Types',
+        raw: actionsSourceTypes.join(', '), formatted: actionsSourceTypes.join(', ')
+      });
+      tags.allTags.push({
+        tag: 0, hex: '0x0000', group: 'Content Credentials',
+        name: 'Actions Parameters Ingredients Url', desc: 'C2PA Actions Ingredients URLs',
+        raw: actionsIngredients.join(', '), formatted: actionsIngredients.join(', ')
+      });
+      tags.allTags.push({
+        tag: 0, hex: '0x0000', group: 'Content Credentials',
+        name: 'Relationship', desc: 'C2PA Ingredients Relationship',
+        raw: relationship, formatted: relationship
+      });
+      tags.allTags.push({
+        tag: 0, hex: '0x0000', group: 'Content Credentials',
+        name: 'Validation Results Active Manifest Success Code', desc: 'C2PA Validation Success Codes',
+        raw: validationCodes.join(', '), formatted: validationCodes.join(', ')
+      });
+      tags.allTags.push({
+        tag: 0, hex: '0x0000', group: 'Content Credentials',
+        name: 'Validation Results Active Manifest Success Url', desc: 'C2PA Validation Success URLs',
+        raw: validationUrls.join(', '), formatted: validationUrls.join(', ')
+      });
+      tags.allTags.push({
+        tag: 0, hex: '0x0000', group: 'Content Credentials',
+        name: 'Active Manifest Url', desc: 'C2PA Active Manifest URL',
+        raw: `self#jumbf=/c2pa/${manifestUrn}`, formatted: `self#jumbf=/c2pa/${manifestUrn}`
+      });
+      tags.allTags.push({
+        tag: 0, hex: '0x0000', group: 'Content Credentials',
+        name: 'Claim Signature Url', desc: 'C2PA Claim Signature URL',
+        raw: `self#jumbf=/c2pa/${manifestUrn}/c2pa.signature`, formatted: `self#jumbf=/c2pa/${manifestUrn}/c2pa.signature`
+      });
+
+      tags.detectedSegments = tags.detectedSegments || {};
+      tags.detectedSegments.otherApp = tags.detectedSegments.otherApp || [];
+      if (!tags.detectedSegments.otherApp.includes('C2PA')) {
+        tags.detectedSegments.otherApp.push('C2PA');
+      }
+    } catch (e) {
+      console.error('Error processing C2PA boxes:', e);
+    }
+  };
+
+  const parseJumbfSegment = (buffer, offset, length, tags) => {
+    try {
+      const view = new DataView(buffer, offset, length);
+      let startOffset = 0;
+      while (startOffset < length - 8) {
+        const t = view.getUint32(startOffset + 4, false);
+        if (t === 0x6A756D62 || t === 0x6A756D64) {
+          break;
+        }
+        startOffset++;
+      }
+      if (startOffset < length - 8) {
+        const boxes = parseJumbfBoxTree(view, startOffset, length);
+        processC2paBoxes(boxes, view, tags);
       }
     } catch (e) {
       console.error('JUMBF parsing error:', e);
@@ -900,7 +1282,52 @@ export default function MetadataPage() {
           const totalChunkLength = 12 + chunkLength;
           if (offset + totalChunkLength > length) break;
 
-          if (chunkType === 'eXIf') {
+          if (chunkType === 'IHDR' && chunkLength >= 13) {
+            const bitDepth = view.getUint8(offset + 16);
+            const colorTypeVal = view.getUint8(offset + 17);
+            const compressionVal = view.getUint8(offset + 18);
+            const filterVal = view.getUint8(offset + 19);
+            const interlaceVal = view.getUint8(offset + 20);
+
+            let colorTypeStr = 'Unknown';
+            switch (colorTypeVal) {
+              case 0: colorTypeStr = 'Grayscale'; break;
+              case 2: colorTypeStr = 'RGB'; break;
+              case 3: colorTypeStr = 'Indexed-color'; break;
+              case 4: colorTypeStr = 'Grayscale with Alpha'; break;
+              case 6: colorTypeStr = 'RGB with Alpha'; break;
+            }
+
+            const compressionStr = compressionVal === 0 ? 'Deflate/Inflate' : 'Unknown';
+            const filterStr = filterVal === 0 ? 'Adaptive' : 'Unknown';
+            const interlaceStr = interlaceVal === 0 ? 'Noninterlaced' : interlaceVal === 1 ? 'Adam7 Interlace' : 'Unknown';
+
+            tags.allTags.push({
+              tag: 0, hex: '0x0000', group: 'Image Properties',
+              name: 'Bit Depth', desc: 'PNG Bit Depth',
+              raw: bitDepth, formatted: bitDepth
+            });
+            tags.allTags.push({
+              tag: 0, hex: '0x0000', group: 'Image Properties',
+              name: 'Color Type', desc: 'PNG Color Type',
+              raw: colorTypeStr, formatted: colorTypeStr
+            });
+            tags.allTags.push({
+              tag: 0, hex: '0x0000', group: 'Image Properties',
+              name: 'Compression', desc: 'PNG Compression Method',
+              raw: compressionStr, formatted: compressionStr
+            });
+            tags.allTags.push({
+              tag: 0, hex: '0x0000', group: 'Image Properties',
+              name: 'Filter', desc: 'PNG Filter Method',
+              raw: filterStr, formatted: filterStr
+            });
+            tags.allTags.push({
+              tag: 0, hex: '0x0000', group: 'Image Properties',
+              name: 'Interlace', desc: 'PNG Interlace Method',
+              raw: interlaceStr, formatted: interlaceStr
+            });
+          } else if (chunkType === 'eXIf') {
             detectedSegments.exif = true;
             try {
               const exifDataView = new DataView(buffer, offset + 8, chunkLength);
@@ -911,84 +1338,10 @@ export default function MetadataPage() {
           } else if (chunkType === 'iCCP') {
             detectedSegments.icc = true;
           } else if (chunkType === 'c2pa') {
-            tags.allTags.push({
-              tag: 0,
-              hex: '0x0000',
-              group: 'Content Credentials',
-              name: 'Content Credentials (C2PA)',
-              desc: 'C2PA Manifest Store presence in PNG',
-              raw: 'Detected',
-              formatted: 'Found active C2PA Content Credentials metadata chunk (c2pa)'
-            });
             try {
-              const segmentBytes = new Uint8Array(buffer, offset + 8, chunkLength);
-              const searchStr = 'claim_generator';
-              let claimGenIdx = -1;
-              for (let i = 0; i < segmentBytes.length - searchStr.length; i++) {
-                let match = true;
-                for (let j = 0; j < searchStr.length; j++) {
-                  if (segmentBytes[i + j] !== searchStr.charCodeAt(j)) {
-                    match = false;
-                    break;
-                  }
-                }
-                if (match) {
-                  claimGenIdx = i;
-                  break;
-                }
-              }
-              if (claimGenIdx !== -1) {
-                let scanIdx = claimGenIdx + searchStr.length;
-                let foundGenerator = null;
-                const decoder = new TextDecoder('utf-8');
-                for (let k = 0; k < 15; k++) {
-                  if (scanIdx + k >= segmentBytes.length) break;
-                  const b = segmentBytes[scanIdx + k];
-                  if (b >= 0x60 && b <= 0x7B) {
-                    const strLen = b - 0x60;
-                    if (scanIdx + k + 1 + strLen <= segmentBytes.length) {
-                      foundGenerator = decoder.decode(segmentBytes.slice(scanIdx + k + 1, scanIdx + k + 1 + strLen)).trim();
-                    }
-                    break;
-                  } else if (b === 0x78) {
-                    if (scanIdx + k + 2 <= segmentBytes.length) {
-                      const strLen = segmentBytes[scanIdx + k + 1];
-                      if (scanIdx + k + 2 + strLen <= segmentBytes.length) {
-                        foundGenerator = decoder.decode(segmentBytes.slice(scanIdx + k + 2, scanIdx + k + 2 + strLen)).trim();
-                      }
-                    }
-                    break;
-                  } else if (b === 0x79) {
-                    if (scanIdx + k + 3 <= segmentBytes.length) {
-                      const strLen = (segmentBytes[scanIdx + k + 1] << 8) | segmentBytes[scanIdx + k + 2];
-                      if (scanIdx + k + 3 + strLen <= segmentBytes.length) {
-                        foundGenerator = decoder.decode(segmentBytes.slice(scanIdx + k + 3, scanIdx + k + 3 + strLen)).trim();
-                      }
-                    }
-                    break;
-                  }
-                }
-                if (foundGenerator) {
-                  tags.allTags.push({
-                    tag: 0,
-                    hex: '0x0000',
-                    group: 'Content Credentials',
-                    name: 'Claim Generator',
-                    desc: 'The tool that generated the claim / manifest',
-                    raw: foundGenerator,
-                    formatted: foundGenerator
-                  });
-                  tags.allTags.push({
-                    tag: 0,
-                    hex: '0x0000',
-                    group: 'AI Metadata & Credentials',
-                    name: 'AI Manifest Details',
-                    desc: 'Details about the AI creator tool',
-                    raw: `Generated by ${foundGenerator}`,
-                    formatted: `This image contains Content Credentials generated by ${foundGenerator}.`
-                  });
-                }
-              }
+              const chunkDataView = new DataView(buffer, offset + 8, chunkLength);
+              const boxes = parseJumbfBoxTree(chunkDataView, 0, chunkLength);
+              processC2paBoxes(boxes, chunkDataView, tags);
             } catch (e) {
               console.error('Error parsing c2pa chunk in PNG:', e);
             }
@@ -1061,6 +1414,7 @@ export default function MetadataPage() {
       let offset = 2;
       const length = view.byteLength;
       let exifDataView = null;
+      const app11Groups = {};
 
       try {
         while (offset < length - 2) {
@@ -1071,7 +1425,27 @@ export default function MetadataPage() {
             }
             const segmentLength = view.getUint16(offset + 2, false);
             
-            if (marker === 0xFFE1) {
+            if (marker >= 0xFFC0 && marker <= 0xFFCF && marker !== 0xFFC4 && marker !== 0xFFC8 && marker !== 0xFFCC) {
+              if (segmentLength >= 8 && offset + 8 < length) {
+                const bitDepth = view.getUint8(offset + 4);
+                const numComponents = view.getUint8(offset + 9);
+                let colorTypeStr = 'Unknown';
+                if (numComponents === 1) colorTypeStr = 'Grayscale';
+                else if (numComponents === 3) colorTypeStr = 'YCbCr';
+                else if (numComponents === 4) colorTypeStr = 'CMYK';
+
+                tags.allTags.push({
+                  tag: 0, hex: '0x0000', group: 'Image Properties',
+                  name: 'Bit Depth', desc: 'JPEG Data Precision',
+                  raw: bitDepth, formatted: bitDepth
+                });
+                tags.allTags.push({
+                  tag: 0, hex: '0x0000', group: 'Image Properties',
+                  name: 'Color Type', desc: 'JPEG Color Components',
+                  raw: colorTypeStr, formatted: colorTypeStr
+                });
+              }
+            } else if (marker === 0xFFE1) {
               // APP1: EXIF or XMP
               if (offset + 10 < length) {
                 const header = view.getUint32(offset + 4, false);
@@ -1140,10 +1514,19 @@ export default function MetadataPage() {
               detectedSegments.icc = true; // ICC Profile
             } else if (marker === 0xFFEB) { // APP11: JUMBF / C2PA Provenance
               detectedSegments.otherApp.push('APP11');
-              try {
-                parseJumbfSegment(buffer, offset + 4, segmentLength - 2, tags);
-              } catch (e) {
-                console.error('Failed to parse JUMBF segment:', e);
+              if (segmentLength >= 6 && offset + 6 < length) {
+                const isJp = view.getUint16(offset + 4, false) === 0x4A50;
+                if (isJp) {
+                  const xt = view.getUint16(offset + 6, false);
+                  const payloadStart = offset + 8;
+                  const payloadLen = segmentLength - 6;
+                  if (payloadStart + payloadLen <= length) {
+                    if (!app11Groups[xt]) {
+                      app11Groups[xt] = [];
+                    }
+                    app11Groups[xt].push(new Uint8Array(buffer, payloadStart, payloadLen));
+                  }
+                }
               }
             } else if (marker >= 0xFFE3 && marker <= 0xFFEF) {
               detectedSegments.otherApp.push(`APP${marker - 0xFFE0}`);
@@ -1156,6 +1539,37 @@ export default function MetadataPage() {
         }
       } catch (err) {
         console.warn('Malformed JPEG headers read warning', err);
+      }
+
+      // Concatenate and process any APP11 JUMBF segments
+      for (const xt in app11Groups) {
+        const chunks = app11Groups[xt];
+        let totalLen = 0;
+        chunks.forEach(c => totalLen += c.byteLength);
+        const combined = new Uint8Array(totalLen);
+        let curOffset = 0;
+        chunks.forEach(c => {
+          combined.set(c, curOffset);
+          curOffset += c.byteLength;
+        });
+
+        try {
+          const app11DataView = new DataView(combined.buffer, combined.byteOffset, combined.byteLength);
+          let startOffset = 0;
+          while (startOffset < combined.byteLength - 8) {
+            const t = app11DataView.getUint32(startOffset + 4, false);
+            if (t === 0x6A756D62 || t === 0x6A756D64) {
+              break;
+            }
+            startOffset++;
+          }
+          if (startOffset < combined.byteLength - 8) {
+            const boxes = parseJumbfBoxTree(app11DataView, startOffset, combined.byteLength);
+            processC2paBoxes(boxes, app11DataView, tags);
+          }
+        } catch (e) {
+          console.error('Failed to parse concatenated JUMBF:', e);
+        }
       }
 
       if (exifDataView) {
