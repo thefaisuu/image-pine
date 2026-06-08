@@ -325,7 +325,7 @@ export default function AddRemovePdfPagesPage() {
 
           let srcDoc = pdfCache[page.fileId];
           if (!srcDoc) {
-            srcDoc = await PDFDocument.load(fileData.buffer);
+            srcDoc = await PDFDocument.load(fileData.buffer.slice(0));
             pdfCache[page.fileId] = srcDoc;
           }
 
@@ -341,7 +341,7 @@ export default function AddRemovePdfPagesPage() {
           const fileData = sourceFilesRef.current[page.fileId];
           if (!fileData) throw new Error(`Missing source image for page ${idx + 1}`);
 
-          const embeddedImage = await pdfDoc.embedJpg(fileData.buffer);
+          const embeddedImage = await pdfDoc.embedJpg(fileData.buffer.slice(0));
           const size = embeddedImage.scale(1);
 
           targetPage = pdfDoc.addPage([size.width, size.height]);
