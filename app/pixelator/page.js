@@ -231,7 +231,7 @@ export default function PixelatorPage() {
 
   return (
     <ToolPageShell
-      title="Pixel Art Generator & Retro Art Maker"
+      title="Pixel Art Generator"
       subtitle="Convert any image or illustration into stylized retro pixel art. Customize color palettes and tile grid dividers."
       features={_FEATURES}
       steps={_STEPS}

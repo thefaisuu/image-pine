@@ -296,7 +296,7 @@ export default function PaletteExtractorPage() {
 
   return (
     <ToolPageShell
-      title="Color Palette Extractor"
+      title="Palette Extractor"
       subtitle="Extract colors from your images instantly. Copy Hex, RGB, or HSL codes, and download palette swatch cards."
       features={_FEATURES}
       steps={_STEPS}

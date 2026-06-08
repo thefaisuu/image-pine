@@ -100,7 +100,7 @@ export default function BulkRenamePage() {
 
   return (
     <ToolPageShell
-      title="Bulk Rename & File Organizer"
+      title="Bulk Renamer"
       subtitle="Organize your image library in seconds. Rename dozens of files using custom patterns and download them in a single ZIP."
       features={_FEATURES}
       steps={_STEPS}

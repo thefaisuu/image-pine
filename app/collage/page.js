@@ -147,7 +147,7 @@ export default function CollagePage() {
 
   return (
     <ToolPageShell
-      title="Photo Collage Maker"
+      title="Collage Maker"
       subtitle="Combine multiple photos into a beautiful grid collage. Choose layout, spacing, and fill color. Free, browser-based - nothing uploaded."
       features={_FEATURES}
       steps={_STEPS}

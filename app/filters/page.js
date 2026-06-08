@@ -208,7 +208,7 @@ export default function FiltersPage() {
 
   return (
     <ToolPageShell
-      title="Photo Filters & Color Adjustments"
+      title="Photo Filters"
       subtitle="Instantly apply vintage, retro, or modern filters to your photos, and adjust colors with precision. 100% locally processed."
       features={_FEATURES}
       steps={_STEPS}

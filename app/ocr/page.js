@@ -130,7 +130,7 @@ export default function OcrPage() {
 
   return (
     <ToolPageShell
-      title="Image OCR Text Extractor"
+      title="Image OCR Extractor"
       subtitle="Extract text from screenshots, scanned documents, and photos. Runs locally in your browser with complete privacy."
       features={_FEATURES}
       steps={_STEPS}

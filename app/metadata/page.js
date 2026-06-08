@@ -1785,7 +1785,7 @@ export default function MetadataPage() {
 
   return (
     <ToolPageShell
-      title="EXIF Metadata Stripper & Viewer"
+      title="EXIF Metadata Stripper"
       subtitle="View hidden camera details and GPS locations embedded in your photos, then losslessly strip them to protect your privacy online."
       features={_FEATURES}
       steps={_STEPS}

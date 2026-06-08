@@ -472,7 +472,7 @@ export default function WatermarkPage() {
   
   return (
     <ToolPageShell
-      title="Image Watermarker & Logo Overlayer"
+      title="Image Watermarker"
       subtitle="Protect your visual assets. Add customizable text watermarks or brand logo overlays in bulk, locally in your browser."
       features={_FEATURES}
       steps={_STEPS}

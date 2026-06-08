@@ -197,7 +197,7 @@ export default function MemeGeneratorPage() {
 
   return (
     <ToolPageShell
-      title="Meme Generator & Caption Studio"
+      title="Meme Generator"
       subtitle="Create custom memes instantly in your browser. Add draggable text, change sizes and download in high quality."
       features={_FEATURES}
       steps={_STEPS}

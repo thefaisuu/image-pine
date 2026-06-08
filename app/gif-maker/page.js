@@ -180,7 +180,7 @@ export default function GifMakerPage() {
 
   return (
     <ToolPageShell
-      title="GIF Maker & Compiler"
+      title="GIF Maker"
       subtitle="Assemble static PNG, JPEG, or WebP images into high-quality animated GIFs directly in your browser sandbox."
       features={_FEATURES}
       steps={_STEPS}

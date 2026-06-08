@@ -253,7 +253,7 @@ export default function SvgRasterizerPage() {
 
   return (
     <ToolPageShell
-      title="SVG to High-Res PNG/JPEG Converter"
+      title="SVG Rasterizer"
       subtitle="Rasterize vector SVG files to crisp PNG, JPEG, or WebP images at any custom dimension or scale (up to 8x) locally."
       features={_FEATURES}
       steps={_STEPS}
