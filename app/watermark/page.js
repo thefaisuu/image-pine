@@ -192,8 +192,8 @@ export default function WatermarkPage() {
     },
     {
       icon: (
-        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
-          <path d="M9 12l2 2 4-4m5.6 1.2a9 9 0 11-11.2 0C10.4 3.7 13.6 3.7 15.6 5.7z" />
+        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 8V4m0 0h4M4 4l5 5m11-5V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4M4 20l5-5m11 5v-4m0 0h-4m4 4l-5-5" />
         </svg>
       ),
       title: 'Lossless Visual Scaling',

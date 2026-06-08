@@ -30,8 +30,8 @@ const _FEATURES = [
   },
   {
     icon: (
-      <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
-        <path d="M4 14a1 1 0 0 1-.78-.37 1 1 0 0 1-.1-.97l.83-2a1 1 0 0 1 .45-.52l12-7a1 1 0 0 1 1.25.17l2.5 2.5a1 1 0 0 1 .17 1.25l-7 12a1 1 0 0 1-.52.45l-2 .83a1 1 0 0 1-.37.07zm1.62-3.12l-.4 1 .94.94.94-.4.4-.94-.94-.94zM16.5 6.5l1 1" />
+      <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8Z" />
       </svg>
     ),
     title: 'Optimized Solver Speed',
@@ -348,21 +348,17 @@ export default function ObjectEraserPage() {
           for (let y = minY; y <= maxY; y++) {
             for (let x = minX; x <= maxX; x++) {
               const idx = (y * width + x) * 4;
-              const alpha = maskData[idx + 3] / 255;
 
-              if (alpha > 0.05) {
+              // If this pixel is part of the mask (alpha > 0), solve Laplace equation
+              if (maskData[idx + 3] > 10) {
                 const top = ((y - 1) * width + x) * 4;
                 const bottom = ((y + 1) * width + x) * 4;
                 const left = (y * width + (x - 1)) * 4;
                 const right = (y * width + (x + 1)) * 4;
 
-                const diffusedR = (src[top] + src[bottom] + src[left] + src[right]) >> 2;
-                const diffusedG = (src[top + 1] + src[bottom + 1] + src[left + 1] + src[right + 1]) >> 2;
-                const diffusedB = (src[top + 2] + src[bottom + 2] + src[left + 2] + src[right + 2]) >> 2;
-
-                dst[idx]     = Math.round(src[idx] * (1 - alpha) + diffusedR * alpha);
-                dst[idx + 1] = Math.round(src[idx + 1] * (1 - alpha) + diffusedG * alpha);
-                dst[idx + 2] = Math.round(src[idx + 2] * (1 - alpha) + diffusedB * alpha);
+                dst[idx]     = (src[top] + src[bottom] + src[left] + src[right]) >> 2;
+                dst[idx + 1] = (src[top + 1] + src[bottom + 1] + src[left + 1] + src[right + 1]) >> 2;
+                dst[idx + 2] = (src[top + 2] + src[bottom + 2] + src[left + 2] + src[right + 2]) >> 2;
               } else {
                 dst[idx]     = src[idx];
                 dst[idx + 1] = src[idx + 1];
@@ -373,10 +369,12 @@ export default function ObjectEraserPage() {
         }
 
         const finalBuffer = iterations % 2 === 0 ? buffer1 : buffer2;
+        // Blend the diffused image back with the clean original image using the feathered mask alpha values
         for (let i = 0; i < data.length; i += 4) {
-          data[i]     = finalBuffer[i];
-          data[i + 1] = finalBuffer[i + 1];
-          data[i + 2] = finalBuffer[i + 2];
+          const alpha = maskData[i + 3] / 255;
+          data[i]     = Math.round(data[i] * (1 - alpha) + finalBuffer[i] * alpha);
+          data[i + 1] = Math.round(data[i + 1] * (1 - alpha) + finalBuffer[i + 1] * alpha);
+          data[i + 2] = Math.round(data[i + 2] * (1 - alpha) + finalBuffer[i + 2] * alpha);
         }
 
         ctx.putImageData(imgData, 0, 0);
