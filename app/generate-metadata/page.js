@@ -124,8 +124,8 @@ const buildPrompt = (settings) => {
 Return a JSON object containing exactly three keys: "title", "keywords", and "category".
 
 Constraints:
-1. "title": A descriptive, search-friendly title. It MUST NOT exceed ${titleLength} characters in total length.
-2. "keywords": An array of descriptive keywords/tags. It MUST contain exactly ${keywordLength} keywords.
+1. "title": A descriptive, search-friendly title. The title MUST be close to ${titleLength} characters in length (aim for around ${titleLength} characters, and it must not exceed ${titleLength} characters). Do not write a short title; it should be descriptive and detailed to utilize the allowed space.
+2. "keywords": An array of descriptive keywords/tags. It MUST contain exactly ${keywordLength} keywords. You must output exactly ${keywordLength} items in the "keywords" array, no more and no less. Count them carefully to ensure there are exactly ${keywordLength} strings.
 3. Keyword format: Each keyword in the array must be in the format: ${formatDesc}.
 4. "category": An integer between 1 and 21 representing the best-matching category from the list below:
    1 - Animals
@@ -1337,59 +1337,6 @@ export default function GenerateMetadataPage() {
                               {selectedMeta.status === 'processing' ? 'Generating keywords...' : 'No keywords generated yet.'}
                             </span>
                           )}
-                        </div>
-
-                        {/* Add Custom Tag */}
-                        <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-                          <input
-                            type="text"
-                            id="new_tag_input"
-                            placeholder="Add tag..."
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                addKeywordTag(selectedFile.id, e.target.value);
-                                e.target.value = '';
-                              }
-                            }}
-                            style={{
-                              flex: 1, padding: '6px 12px',
-                              background: '#fff', border: '1px solid #E4E4EF',
-                              borderRadius: 8, fontSize: 12, outline: 'none'
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const el = document.getElementById('new_tag_input');
-                              if (el) {
-                                addKeywordTag(selectedFile.id, el.value);
-                                el.value = '';
-                              }
-                            }}
-                            style={{
-                              background: '#F1F1F7', border: '1px solid #E4E4EF', borderRadius: 8,
-                              fontSize: 11, fontWeight: 700, color: '#4E4E6D', padding: '6px 12px', cursor: 'pointer'
-                            }}
-                          >
-                            Add Tag
-                          </button>
-                        </div>
-
-                        {/* Raw Comma-Separated Input for Quick Clipboard Copy/Paste */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 10 }}>
-                          <label style={{ fontSize: 9, fontWeight: 800, color: '#9898B5', textTransform: 'uppercase' }}>Edit as Raw CSV string</label>
-                          <textarea
-                            value={selectedMeta.keywords ? selectedMeta.keywords.join(', ') : ''}
-                            onChange={(e) => handleKeywordsChange(selectedFile.id, e.target.value)}
-                            disabled={selectedMeta.status === 'processing'}
-                            rows="2"
-                            style={{
-                              width: '100%', padding: '8px 12px',
-                              background: '#F7F7FB', border: '1px solid #E4E4EF',
-                              borderRadius: 9, fontSize: 11, fontWeight: 600,
-                              color: '#111128', outline: 'none', resize: 'none', fontFamily: 'monospace'
-                            }}
-                          />
                         </div>
                       </div>
 
