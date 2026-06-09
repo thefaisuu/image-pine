@@ -30,6 +30,48 @@ const ADOBE_STOCK_CATEGORIES = [
   { id: 21, name: 'Travel' }
 ];
 
+const enforceTitleLength = (title, targetLength, keywords) => {
+  let refinedTitle = title.trim();
+  if (refinedTitle.length === targetLength) {
+    return refinedTitle;
+  }
+  
+  if (refinedTitle.length > targetLength) {
+    // Truncate cleanly at a space
+    let truncated = refinedTitle.substring(0, targetLength);
+    const lastSpace = truncated.lastIndexOf(' ');
+    if (lastSpace > targetLength / 2) {
+      truncated = truncated.substring(0, lastSpace);
+    }
+    // Pad to exact length with dots
+    while (truncated.length < targetLength) {
+      truncated += '.';
+    }
+    return truncated;
+  }
+  
+  // If shorter, append keywords
+  let separator = ' - ';
+  let kwList = [...(keywords || [])];
+  
+  // If we don't have enough keywords, repeat them to ensure we can pad
+  if (kwList.length > 0) {
+    while (refinedTitle.length + separator.length + kwList[0].length < targetLength) {
+      const kw = kwList.shift();
+      refinedTitle += separator + kw;
+      separator = ', ';
+      kwList.push(kw); // put it back at the end to cycle
+    }
+  }
+  
+  // If still shorter by a small margin, pad with dots to reach exact targetLength
+  while (refinedTitle.length < targetLength) {
+    refinedTitle += '.';
+  }
+  
+  return refinedTitle;
+};
+
 // Features for the Tool Shell
 const _FEATURES = [
   {
@@ -73,12 +115,12 @@ const _FEATURES = [
   {
     icon: (
       <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21 2l-10 10" />
-        <circle cx="7.5" cy="16.5" r="4.5" />
-        <path d="M16 8l2 2" />
-        <path d="M13.5 10.5l2 2" />
-        <path d="M20 12a8 8 0 0 1-8 8" />
-        <path d="M12 4a8 8 0 0 1 8 8" />
+        <path d="M10 14l-4 4v2h2v-2h2v-2h2l-2-2z" />
+        <circle cx="14" cy="10" r="3" />
+        <path d="M21 12a9 9 0 0 0-9-9" />
+        <path d="M3 12a9 9 0 0 0 9 9" />
+        <polyline points="18 3 21 3 21 6" />
+        <polyline points="6 21 3 21 3 18" />
       </svg>
     ),
     title: 'Fallback Key Rotation',
@@ -719,10 +761,12 @@ export default function GenerateMetadataPage() {
         const resKeywords = Array.isArray(parsed.keywords) ? parsed.keywords : [];
         const resCategory = parsed.category ? parseInt(parsed.category, 10) : '';
 
+        const exactTitle = enforceTitleLength(resTitle, titleLength, resKeywords);
+
         setMetadataMap(prev => ({
           ...prev,
           [file.id]: {
-            title: resTitle,
+            title: exactTitle,
             keywords: resKeywords,
             category: isNaN(resCategory) ? '' : resCategory,
             status: 'completed',
