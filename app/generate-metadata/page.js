@@ -909,7 +909,7 @@ export default function GenerateMetadataPage() {
           {showConfig && (
             <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #F1F1F7', display: 'flex', flexDirection: 'column', gap: 14 }} className="animate-fade-in">
               <p style={{ fontSize: 12, color: '#6B6B8A', margin: 0, lineHeight: 1.5 }}>
-                Provide up to three **Groq API Keys**. Keys are stored securely in browser cookies and sent directly to Groq. If key 1 hits a rate limit (HTTP 429), rotation fallbacks will proceed to key 2, then key 3.
+                Provide up to three Groq API Keys. Keys are stored securely in browser cookies and sent directly to Groq. If key 1 hits a rate limit (HTTP 429), rotation fallbacks will proceed to key 2, then key 3.
               </p>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
