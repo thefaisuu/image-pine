@@ -6,6 +6,30 @@ import { saveAs } from 'file-saver';
 import { saveHistory } from '@/lib/storage';
 import ToolPageShell from '@/components/ToolPageShell';
 
+const ADOBE_STOCK_CATEGORIES = [
+  { id: 1, name: 'Animals' },
+  { id: 2, name: 'Buildings and Architecture' },
+  { id: 3, name: 'Business' },
+  { id: 4, name: 'Drinks' },
+  { id: 5, name: 'The Environment' },
+  { id: 6, name: 'States of Mind' },
+  { id: 7, name: 'Food' },
+  { id: 8, name: 'Graphic Resources' },
+  { id: 9, name: 'Hobbies and Leisure' },
+  { id: 10, name: 'Industry' },
+  { id: 11, name: 'Landscapes' },
+  { id: 12, name: 'Lifestyle' },
+  { id: 13, name: 'People' },
+  { id: 14, name: 'Plants and Flowers' },
+  { id: 15, name: 'Culture and Religion' },
+  { id: 16, name: 'Science' },
+  { id: 17, name: 'Social Issues' },
+  { id: 18, name: 'Sports' },
+  { id: 19, name: 'Technology' },
+  { id: 20, name: 'Transport' },
+  { id: 21, name: 'Travel' }
+];
+
 // Features for the Tool Shell
 const _FEATURES = [
   {
@@ -17,7 +41,7 @@ const _FEATURES = [
       </svg>
     ),
     title: 'Groq-Powered Vision',
-    desc: 'Uses Groq\'s high-speed Llama 3.2 vision models to extract highly descriptive and relevant metadata tags from assets instantly.'
+    desc: 'Uses Groq\'s high-speed Llama vision models to extract highly descriptive and relevant metadata tags from assets instantly.'
   },
   {
     icon: (
@@ -97,25 +121,48 @@ const buildPrompt = (settings) => {
   }
 
   let prompt = `Analyze this image and generate SEO-optimized metadata.
-Return a JSON object containing exactly two keys: "title" and "keywords".
+Return a JSON object containing exactly three keys: "title", "keywords", and "category".
 
 Constraints:
 1. "title": A descriptive, search-friendly title. It MUST NOT exceed ${titleLength} characters in total length.
 2. "keywords": An array of descriptive keywords/tags. It MUST contain exactly ${keywordLength} keywords.
 3. Keyword format: Each keyword in the array must be in the format: ${formatDesc}.
+4. "category": An integer between 1 and 21 representing the best-matching category from the list below:
+   1 - Animals
+   2 - Buildings and Architecture
+   3 - Business
+   4 - Drinks
+   5 - The Environment
+   6 - States of Mind
+   7 - Food
+   8 - Graphic Resources
+   9 - Hobbies and Leisure
+   10 - Industry
+   11 - Landscapes
+   12 - Lifestyle
+   13 - People
+   14 - Plants and Flowers
+   15 - Culture and Religion
+   16 - Science
+   17 - Social Issues
+   18 - Sports
+   19 - Technology
+   20 - Transport
+   21 - Travel
 `;
 
   if (includeKeywords.trim()) {
-    prompt += `4. Inclusion: You MUST include the following words/tags (or highly similar variants) in the keywords array: ${includeKeywords}.\n`;
+    prompt += `5. Inclusion: You MUST include the following words/tags (or highly similar variants) in the keywords array: ${includeKeywords}.\n`;
   }
   if (excludeKeywords.trim()) {
-    prompt += `5. Exclusion: You MUST NOT include any of the following words/tags (or variants) in the title or keywords array: ${excludeKeywords}.\n`;
+    prompt += `6. Exclusion: You MUST NOT include any of the following words/tags (or variants) in the title or keywords array: ${excludeKeywords}.\n`;
   }
 
   prompt += `\nResponse format MUST be a valid JSON object matching this schema exactly, with no additional markdown formatting outside the JSON block:
 {
   "title": "your title string here",
-  "keywords": ["keyword1", "keyword2", ...]
+  "keywords": ["keyword1", "keyword2", ...],
+  "category": 12
 }`;
 
   return prompt;
@@ -260,7 +307,7 @@ const callGrokApiWithFallback = async (imageB64, mimeType, prompt, apiKeys, mode
           'Authorization': `Bearer ${key}`
         },
         body: JSON.stringify({
-          model: model || 'llama-3.2-11b-vision-preview',
+          model: model || 'meta-llama/llama-4-scout-17b-16e-instruct',
           messages: [
             {
               role: 'user',
@@ -365,7 +412,7 @@ export default function GenerateMetadataPage() {
 
   const isGeneratingRef = useRef(false);
   const currentKeyIndexRef = useRef(0);
-  const modelName = 'llama-3.2-11b-vision-preview'; // Hardcoded vision model for Groq
+  const modelName = 'meta-llama/llama-4-scout-17b-16e-instruct'; // Hardcoded vision model for Groq
 
   // Load API keys from browser cookies on mount
   useEffect(() => {
@@ -463,7 +510,7 @@ export default function GenerateMetadataPage() {
           'Authorization': `Bearer ${firstKey}`
         },
         body: JSON.stringify({
-          model: 'llama-3.2-11b-vision-preview',
+          model: 'meta-llama/llama-4-scout-17b-16e-instruct',
           messages: [{ role: 'user', content: 'Ping' }],
           max_tokens: 2
         })
@@ -645,12 +692,14 @@ export default function GenerateMetadataPage() {
 
         const resTitle = parsed.title || '';
         const resKeywords = Array.isArray(parsed.keywords) ? parsed.keywords : [];
+        const resCategory = parsed.category ? parseInt(parsed.category, 10) : '';
 
         setMetadataMap(prev => ({
           ...prev,
           [file.id]: {
             title: resTitle,
             keywords: resKeywords,
+            category: isNaN(resCategory) ? '' : resCategory,
             status: 'completed',
             error: ''
           }
@@ -690,8 +739,18 @@ export default function GenerateMetadataPage() {
     setMetadataMap(prev => ({
       ...prev,
       [fileId]: {
-        ...(prev[fileId] || { keywords: [], status: 'pending', error: '' }),
+        ...(prev[fileId] || { keywords: [], status: 'pending', error: '', category: '' }),
         title: val
+      }
+    }));
+  };
+
+  const handleCategoryChange = (fileId, val) => {
+    setMetadataMap(prev => ({
+      ...prev,
+      [fileId]: {
+        ...(prev[fileId] || { title: '', keywords: [], status: 'pending', error: '' }),
+        category: val ? parseInt(val, 10) : ''
       }
     }));
   };
@@ -742,20 +801,22 @@ export default function GenerateMetadataPage() {
       return;
     }
 
-    const headers = ['File name', 'Title', 'Keywods'];
+    const headers = ['Filename', 'Title', 'Keywords', 'Category'];
     const rows = files.map(f => {
       const meta = metadataMap[f.id] || {};
       const title = meta.title || '';
       const kws = Array.isArray(meta.keywords) ? meta.keywords.join(', ') : '';
+      const category = meta.category || '';
 
       const escapeCsv = (str) => {
-        return `"${str.replace(/"/g, '""')}"`;
+        return `"${String(str).replace(/"/g, '""')}"`;
       };
 
       return [
         escapeCsv(f.name),
         escapeCsv(title),
-        escapeCsv(kws)
+        escapeCsv(kws),
+        escapeCsv(category)
       ].join(',');
     });
 
@@ -773,7 +834,7 @@ export default function GenerateMetadataPage() {
   };
 
   // State elements derived
-  const selectedMeta = selectedFile ? metadataMap[selectedFile.id] || { title: '', keywords: [], status: 'pending', error: '' } : null;
+  const selectedMeta = selectedFile ? metadataMap[selectedFile.id] || { title: '', keywords: [], category: '', status: 'pending', error: '' } : null;
   const progressPercent = files.length > 0 ? Math.round((progress / files.length) * 100) : 0;
   const numConfiguredKeys = apiKeys.filter(k => k.trim() !== '').length;
 
@@ -1213,6 +1274,29 @@ export default function GenerateMetadataPage() {
                             color: '#111128', outline: 'none'
                           }}
                         />
+                      </div>
+
+                      {/* Category Box */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                        <label style={{ fontSize: 11, fontWeight: 800, color: '#4E4E6D', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Category</label>
+                        <select
+                          value={selectedMeta.category || ''}
+                          onChange={(e) => handleCategoryChange(selectedFile.id, e.target.value)}
+                          disabled={selectedMeta.status === 'processing'}
+                          style={{
+                            width: '100%', padding: '9px 12px',
+                            background: '#F7F7FB', border: '1px solid #E4E4EF',
+                            borderRadius: 9, fontSize: 13, fontWeight: 600,
+                            color: '#111128', outline: 'none', cursor: 'pointer'
+                          }}
+                        >
+                          <option value="">Select Category</option>
+                          {ADOBE_STOCK_CATEGORIES.map(cat => (
+                            <option key={cat.id} value={cat.id}>
+                              {cat.id} - {cat.name}
+                            </option>
+                          ))}
+                        </select>
                       </div>
 
                       {/* Keywords Chip List */}
