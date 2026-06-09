@@ -56,7 +56,15 @@ const _FEATURES = [
   {
     icon: (
       <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2C6.48 2 2 6.48 2 12C2 14.72 3.09 17.2 4.86 19C5.34 19.48 6.13 19.34 6.44 18.73C6.79 18.05 7.5 17.5 8.5 17.5H9.5C10.6 17.5 11.5 18.4 11.5 19.5V21.5C11.5 21.78 11.72 22 12 22Z" />
+        <line x1="4" y1="21" x2="4" y2="14" />
+        <line x1="4" y1="10" x2="4" y2="3" />
+        <line x1="12" y1="21" x2="12" y2="12" />
+        <line x1="12" y1="8" x2="12" y2="3" />
+        <line x1="20" y1="21" x2="20" y2="16" />
+        <line x1="20" y1="12" x2="20" y2="3" />
+        <line x1="1" y1="14" x2="7" y2="14" />
+        <line x1="9" y1="8" x2="15" y2="8" />
+        <line x1="17" y1="16" x2="23" y2="16" />
       </svg>
     ),
     title: 'Format Presets',
@@ -65,7 +73,12 @@ const _FEATURES = [
   {
     icon: (
       <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L22 22M15.5 7.5H21v5.5" />
+        <path d="M21 2l-10 10" />
+        <circle cx="7.5" cy="16.5" r="4.5" />
+        <path d="M16 8l2 2" />
+        <path d="M13.5 10.5l2 2" />
+        <path d="M20 12a8 8 0 0 1-8 8" />
+        <path d="M12 4a8 8 0 0 1 8 8" />
       </svg>
     ),
     title: 'Fallback Key Rotation',
@@ -124,7 +137,7 @@ const buildPrompt = (settings) => {
 Return a JSON object containing exactly three keys: "title", "keywords", and "category".
 
 Constraints:
-1. "title": A descriptive, search-friendly title. The title MUST be close to ${titleLength} characters in length (aim for around ${titleLength} characters, and it must not exceed ${titleLength} characters). Do not write a short title; it should be descriptive and detailed to utilize the allowed space.
+1. "title": A descriptive, search-friendly title. The title MUST be EXACTLY ${titleLength} characters in total length (including spaces). Count the characters carefully and adjust the wording so the total character count of the title string is exactly ${titleLength}.
 2. "keywords": An array of descriptive keywords/tags. It MUST contain exactly ${keywordLength} keywords. You must output exactly ${keywordLength} items in the "keywords" array, no more and no less. Count them carefully to ensure there are exactly ${keywordLength} strings.
 3. Keyword format: Each keyword in the array must be in the format: ${formatDesc}.
 4. "category": An integer between 1 and 21 representing the best-matching category from the list below:
@@ -1394,7 +1407,7 @@ export default function GenerateMetadataPage() {
                   {/* Title Constraint Slider */}
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                      <label style={{ fontSize: 11, fontWeight: 700, color: '#6B6B8A' }}>Max Title Length</label>
+                      <label style={{ fontSize: 11, fontWeight: 700, color: '#6B6B8A' }}>Adjust Title Length</label>
                       <span style={{ fontSize: 12, fontWeight: 800, color: '#7342E6' }}>{titleLength} ch</span>
                     </div>
                     <input 
