@@ -519,6 +519,8 @@ export default function GenerateMetadataPage() {
 
   const dropdownRef = useRef(null);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [isAiGenerated, setIsAiGenerated] = useState(false);
+  const [isEditorial, setIsEditorial] = useState(false);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -992,10 +994,12 @@ export default function GenerateMetadataPage() {
     } else if (platform === 'Freepik') {
       headers = ['File name', 'Title', 'Keywords', 'if generated with AI - Prompt', 'Model'];
       delimiter = ';';
-    } else if (platform === 'Depositphotos') {
-      headers = ['Filename', 'Title', 'Description', 'Keywords'];
+    } else if (platform === 'DepositPhotos') {
+      headers = ['Filename', 'Title', 'Description', 'Keywords', 'editorial'];
     } else if (platform === 'iStock') {
-      headers = ['file name', 'title', 'description', 'keywords'];
+      headers = ['file name', 'title', 'description', 'keywords', 'editorial'];
+    } else if (platform === 'Pond5') {
+      headers = ['OriginalFilename', 'Title', 'Description', 'Keywords', 'Editorial'];
     }
 
     const rows = files.map(f => {
@@ -1021,16 +1025,24 @@ export default function GenerateMetadataPage() {
           escapeCsv(kws),
           escapeCsv(catText)
         ].join(delimiter);
-      } else if (platform === 'Vecteezy' || platform === '123RF' || platform === 'Depositphotos') {
+      } else if (platform === 'Vecteezy' || platform === '123RF') {
         return [
           escapeCsv(f.name),
           escapeCsv(title),
           escapeCsv(description),
           escapeCsv(kws)
         ].join(delimiter);
+      } else if (platform === 'DepositPhotos') {
+        return [
+          escapeCsv(f.name),
+          escapeCsv(title),
+          escapeCsv(description),
+          escapeCsv(kws),
+          escapeCsv(isEditorial ? 'yes' : 'no')
+        ].join(delimiter);
       } else if (platform === 'Freepik') {
-        const promptVal = 'Analyze this image and generate SEO-optimized metadata. Return JSON with title, description, keywords, category.';
-        const modelVal = 'meta-llama/llama-4-scout-17b-16e-instruct';
+        const promptVal = isAiGenerated ? 'Analyze this image and generate SEO-optimized metadata. Return JSON with title, description, keywords, category.' : '';
+        const modelVal = isAiGenerated ? 'meta-llama/llama-4-scout-17b-16e-instruct' : '';
         return [
           escapeCsv(f.name),
           escapeCsv(title),
@@ -1043,7 +1055,16 @@ export default function GenerateMetadataPage() {
           escapeCsv(f.name),
           escapeCsv(title),
           escapeCsv(description),
-          escapeCsv(kws)
+          escapeCsv(kws),
+          escapeCsv(isEditorial ? 'yes' : 'no')
+        ].join(delimiter);
+      } else if (platform === 'Pond5') {
+        return [
+          escapeCsv(f.name),
+          escapeCsv(title),
+          escapeCsv(description),
+          escapeCsv(kws),
+          escapeCsv(isEditorial ? 'yes' : 'no')
         ].join(delimiter);
       }
     });
@@ -1355,8 +1376,9 @@ export default function GenerateMetadataPage() {
                           'Vecteezy',
                           '123RF',
                           'Freepik',
-                          'Depositphotos',
-                          'iStock'
+                          'DepositPhotos',
+                          'iStock',
+                          'Pond5'
                         ].map((plat) => (
                           <button
                             key={plat}
@@ -1681,6 +1703,63 @@ export default function GenerateMetadataPage() {
                       Metadata Rules
                     </h4>
                   </div>
+
+                  {/* Batch Options */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 4 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <input 
+                        type="checkbox" 
+                        id="isAiGenerated"
+                        checked={isAiGenerated}
+                        onChange={(e) => setIsAiGenerated(e.target.checked)}
+                        style={{ 
+                          width: 15, 
+                          height: 15, 
+                          cursor: 'pointer'
+                        }}
+                      />
+                      <label 
+                        htmlFor="isAiGenerated" 
+                        style={{ 
+                          fontSize: 11, 
+                          fontWeight: 700, 
+                          color: '#6B6B8A', 
+                          cursor: 'pointer',
+                          userSelect: 'none'
+                        }}
+                      >
+                        Mark batch as AI-generated (Freepik CSV)
+                      </label>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <input 
+                        type="checkbox" 
+                        id="isEditorial"
+                        checked={isEditorial}
+                        onChange={(e) => setIsEditorial(e.target.checked)}
+                        style={{ 
+                          width: 15, 
+                          height: 15, 
+                          cursor: 'pointer'
+                        }}
+                      />
+                      <label 
+                        htmlFor="isEditorial" 
+                        style={{ 
+                          fontSize: 11, 
+                          fontWeight: 700, 
+                          color: '#6B6B8A', 
+                          cursor: 'pointer',
+                          userSelect: 'none'
+                        }}
+                      >
+                        Mark batch as Editorial (iStock, DepositPhotos, Pond5)
+                      </label>
+                    </div>
+                  </div>
+
+                  <div style={{ height: 1, background: '#F1F1F7', margin: '4px 0' }} />
 
                   {/* Title Constraint Slider */}
                   <div>
