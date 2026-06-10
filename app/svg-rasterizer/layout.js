@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "ImagePine - SVG Rasterizer",
+  title: "Convert SVG to Raster Images Online for Free | ImagePine",
   description: "Convert vector SVG images to high-resolution PNG, JPEG, or WebP raster formats locally in your browser. Customize dimensions and scale.",
 };
 

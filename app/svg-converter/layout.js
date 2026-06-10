@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "ImagePine - SVG Converter",
+  title: "Convert SVG Images Online for Free | ImagePine",
   description: "Convert SVG vector graphics to raster formats like PNG or JPG, or convert raster to vector SVG.",
 };
 

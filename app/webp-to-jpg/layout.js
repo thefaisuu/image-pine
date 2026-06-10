@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "ImagePine - WebP to JPG Converter",
+  title: "Convert WebP to JPG Online for Free | ImagePine",
   description: "Convert modern WebP images to standard JPG format for compatibility with older devices.",
 };
 

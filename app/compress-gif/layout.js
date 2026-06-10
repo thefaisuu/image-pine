@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "ImagePine - Compress GIF Images",
+  title: "Compress GIF Images Online for Free | ImagePine",
   description: "Optimize and compress animated GIF images online to reduce file size while keeping animations smooth.",
 };
 
