@@ -519,6 +519,7 @@ export default function GenerateMetadataPage() {
 
   const dropdownRef = useRef(null);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [isFreepikAi, setIsFreepikAi] = useState(false);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -1029,12 +1030,14 @@ export default function GenerateMetadataPage() {
           escapeCsv(kws)
         ].join(delimiter);
       } else if (platform === 'Freepik') {
+        const promptVal = isFreepikAi ? 'Analyze this image and generate SEO-optimized metadata. Return JSON with title, description, keywords, category.' : '';
+        const modelVal = isFreepikAi ? 'meta-llama/llama-4-scout-17b-16e-instruct' : '';
         return [
           escapeCsv(f.name),
           escapeCsv(title),
           escapeCsv(kws),
-          escapeCsv(''),
-          escapeCsv('meta-llama/llama-4-scout-17b-16e-instruct')
+          escapeCsv(promptVal),
+          escapeCsv(modelVal)
         ].join(delimiter);
       } else if (platform === 'iStock') {
         return [
@@ -1355,38 +1358,103 @@ export default function GenerateMetadataPage() {
                           'Freepik',
                           'Depositphotos',
                           'iStock'
-                        ].map((plat) => (
-                          <button
-                            key={plat}
-                            type="button"
-                            onClick={() => {
-                              downloadPlatformCsv(plat);
-                              setShowDropdown(false);
-                            }}
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              color: '#111128',
-                              padding: '8px 16px',
-                              textAlign: 'left',
-                              fontSize: 12,
-                              fontWeight: 600,
-                              cursor: 'pointer',
-                              width: '100%',
-                              transition: 'all 0.15s ease'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.background = '#7342E608';
-                              e.currentTarget.style.color = '#7342E6';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.background = 'none';
-                              e.currentTarget.style.color = '#111128';
-                            }}
-                          >
-                            {plat}
-                          </button>
-                        ))}
+                        ].map((plat) => {
+                          if (plat === 'Freepik') {
+                            return (
+                              <div
+                                key={plat}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  width: '100%',
+                                  padding: '2px 16px',
+                                  background: 'none',
+                                  transition: 'all 0.15s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = '#7342E608';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = 'none';
+                                }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isFreepikAi}
+                                  onChange={(e) => {
+                                    e.stopPropagation();
+                                    setIsFreepikAi(!isFreepikAi);
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  style={{
+                                    marginRight: 8,
+                                    cursor: 'pointer',
+                                    accentColor: '#7342E6',
+                                    width: 14,
+                                    height: 14
+                                  }}
+                                  title="Mark as AI Generated (adds Prompt & Model to CSV)"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    downloadPlatformCsv(plat);
+                                    setShowDropdown(false);
+                                  }}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: '#111128',
+                                    padding: '6px 0',
+                                    textAlign: 'left',
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    flex: 1,
+                                    transition: 'color 0.15s ease'
+                                  }}
+                                  onMouseEnter={(e) => e.currentTarget.style.color = '#7342E6'}
+                                  onMouseLeave={(e) => e.currentTarget.style.color = '#111128'}
+                                >
+                                  Freepik
+                                </button>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <button
+                              key={plat}
+                              type="button"
+                              onClick={() => {
+                                downloadPlatformCsv(plat);
+                                setShowDropdown(false);
+                              }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#111128',
+                                padding: '8px 16px',
+                                textAlign: 'left',
+                                fontSize: 12,
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                width: '100%',
+                                transition: 'all 0.15s ease'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = '#7342E608';
+                                e.currentTarget.style.color = '#7342E6';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'none';
+                                e.currentTarget.style.color = '#111128';
+                              }}
+                            >
+                              {plat}
+                            </button>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
