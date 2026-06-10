@@ -21,7 +21,7 @@ export default function Footer() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-10" style={{ marginBottom: 48 }}>
 
           {/* Brand Column */}
-          <div>
+          <div className="flex flex-col items-center lg:items-start text-center lg:text-left">
             <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 9, textDecoration: 'none', marginBottom: 14 }}>
               <svg viewBox="0 0 1000 1000" width="30" height="30" style={{ flexShrink: 0 }}>
                 <g>
@@ -51,7 +51,7 @@ export default function Footer() {
 
           {/* Link Columns */}
           {[columns.imageTools, columns.studioTools, columns.convert, columns.pdfTools].map((col, i) => (
-            <div key={i}>
+            <div key={i} className="flex flex-col items-center lg:items-start text-center lg:text-left">
               <h4 style={{
                 fontSize: 10, fontWeight: 800, color: '#9898B5',
                 letterSpacing: '0.08em', textTransform: 'uppercase',
@@ -59,7 +59,7 @@ export default function Footer() {
               }}>
                 {t(col.title)}
               </h4>
-              <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <ul className="flex flex-col items-center lg:items-start" style={{ listStyle: 'none', padding: 0, margin: 0, gap: 8 }}>
                 {col.items.map((item) => {
                   const href = getHref(item);
                   return (

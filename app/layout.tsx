@@ -34,7 +34,7 @@ export default function RootLayout({
             __html: `
               (function() {
                 try {
-                  var manual = localStorage.getItem('imagepine_lang_manual');
+                  var manual = sessionStorage.getItem('imagepine_lang_manual');
                   var detected = sessionStorage.getItem('imagepine_lang_detected');
                   var lang = manual || detected;
                   if (lang && lang !== 'en') {
