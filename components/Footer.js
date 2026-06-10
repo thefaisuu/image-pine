@@ -6,7 +6,7 @@ import { useLanguage } from '@/lib/LanguageContext';
 
 export default function Footer() {
   const getHref = (item) => routeMap[item] || '#';
-  const { language, changeLanguage, t } = useLanguage();
+  const { t } = useLanguage();
 
 
   return (
@@ -89,53 +89,8 @@ export default function Footer() {
           borderTop: '1px solid #F1F1F7',
           paddingTop: 20,
         }}>
-          {/* Language and links wrapper */}
+          {/* Policy Links Wrapper */}
           <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4 lg:gap-6 order-1 lg:order-2">
-            {/* Language Selector */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <svg width="14" height="14" fill="none" stroke="#9898B5" viewBox="0 0 24 24" strokeWidth="2" style={{ flexShrink: 0 }}>
-                <circle cx="12" cy="12" r="10" />
-                <line x1="2" y1="12" x2="22" y2="12" />
-                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-              </svg>
-              <select
-                value={language}
-                onChange={(e) => changeLanguage(e.target.value)}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: '#9898B5',
-                  fontSize: 11,
-                  fontWeight: 500,
-                  outline: 'none',
-                  cursor: 'pointer',
-                  padding: '2px 0',
-                  fontFamily: 'inherit',
-                  transition: 'color 0.15s'
-                }}
-                className="hover:text-[#111128]"
-              >
-                <option value="en">English</option>
-                <option value="es">Español</option>
-                <option value="fr">Français</option>
-                <option value="de">Deutsch</option>
-                <option value="it">Italiano</option>
-                <option value="pt">Português</option>
-                <option value="bn">বাংলা</option>
-                <option value="si">සිංහල</option>
-                <option value="nl">Dutch</option>
-                <option value="ja">日本語</option>
-                <option value="zh-CN">简体中文</option>
-                <option value="ko">한국어</option>
-                <option value="sv">Svenska</option>
-                <option value="tr">Türkçe</option>
-                <option value="id">Bahasa Indonesia</option>
-                <option value="pl">Polish</option>
-              </select>
-            </div>
-
-            <span style={{ color: '#E4E4EF', fontSize: 11 }} className="hidden lg:inline-block">|</span>
-
             <div className="flex items-center gap-4 flex-wrap justify-start">
               <a href="/contact" style={{ fontSize: 11, color: '#9898B5', fontWeight: 500, textDecoration: 'none', transition: 'color 0.15s' }} className="hover:text-[#111128]">{t('Contact Us')}</a>
               <a href="/privacy" style={{ fontSize: 11, color: '#9898B5', fontWeight: 500, textDecoration: 'none', transition: 'color 0.15s' }} className="hover:text-[#111128]">{t('Privacy Policy')}</a>
