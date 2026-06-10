@@ -43,30 +43,20 @@ const enforceTitleLength = (title, targetLength, keywords) => {
     if (lastSpace > targetLength / 2) {
       truncated = truncated.substring(0, lastSpace);
     }
-    // Pad to exact length with dots
-    while (truncated.length < targetLength) {
-      truncated += '.';
-    }
-    return truncated;
+    return truncated.trim();
   }
   
   // If shorter, append keywords
   let separator = ' - ';
   let kwList = [...(keywords || [])];
   
-  // If we don't have enough keywords, repeat them to ensure we can pad
   if (kwList.length > 0) {
-    while (refinedTitle.length + separator.length + kwList[0].length < targetLength) {
+    while (refinedTitle.length + separator.length + kwList[0].length <= targetLength) {
       const kw = kwList.shift();
       refinedTitle += separator + kw;
       separator = ', ';
-      kwList.push(kw); // put it back at the end to cycle
+      kwList.push(kw);
     }
-  }
-  
-  // If still shorter by a small margin, pad with dots to reach exact targetLength
-  while (refinedTitle.length < targetLength) {
-    refinedTitle += '.';
   }
   
   return refinedTitle;
@@ -177,30 +167,20 @@ const enforceDescLength = (desc, targetLength, keywords) => {
     if (lastSpace > targetLength / 2) {
       truncated = truncated.substring(0, lastSpace);
     }
-    // Pad to exact length with dots
-    while (truncated.length < targetLength) {
-      truncated += '.';
-    }
-    return truncated;
+    return truncated.trim();
   }
   
   // If shorter, append keywords
   let separator = ' - ';
   let kwList = [...(keywords || [])];
   
-  // If we don't have enough keywords, repeat them to ensure we can pad
   if (kwList.length > 0) {
-    while (refinedDesc.length + separator.length + kwList[0].length < targetLength) {
+    while (refinedDesc.length + separator.length + kwList[0].length <= targetLength) {
       const kw = kwList.shift();
       refinedDesc += separator + kw;
       separator = ', ';
-      kwList.push(kw); // put it back at the end to cycle
+      kwList.push(kw);
     }
-  }
-  
-  // If still shorter by a small margin, pad with dots to reach exact targetLength
-  while (refinedDesc.length < targetLength) {
-    refinedDesc += '.';
   }
   
   return refinedDesc;
