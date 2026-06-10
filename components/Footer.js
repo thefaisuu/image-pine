@@ -21,7 +21,7 @@ export default function Footer() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-10" style={{ marginBottom: 48 }}>
 
           {/* Brand Column */}
-          <div className="flex flex-col items-center lg:items-start text-center lg:text-left">
+          <div className="flex flex-col items-start text-left">
             <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 9, textDecoration: 'none', marginBottom: 14 }}>
               <svg viewBox="0 0 1000 1000" width="30" height="30" style={{ flexShrink: 0 }}>
                 <g>
@@ -30,7 +30,7 @@ export default function Footer() {
                   <path fill="#7342E6" d="M603.36,56.63c-9.62,27.75-19.57,54.57-31.98,83.18c31.9-28.2,64.83-55.77,97.93-83.18H603.36z"/>
                 </g>
               </svg>
-              <span style={{ fontWeight: 800, fontSize: 15, color: '#111128', letterSpacing: '-0.03em' }}>
+              <span className="notranslate" style={{ fontWeight: 800, fontSize: 15, color: '#111128', letterSpacing: '-0.03em' }}>
                 Image<span style={{ color: '#7342E6' }}>Pine</span>
               </span>
             </a>
@@ -51,7 +51,7 @@ export default function Footer() {
 
           {/* Link Columns */}
           {[columns.imageTools, columns.studioTools, columns.convert, columns.pdfTools].map((col, i) => (
-            <div key={i} className="flex flex-col items-center lg:items-start text-center lg:text-left">
+            <div key={i} className="flex flex-col items-start text-left">
               <h4 style={{
                 fontSize: 10, fontWeight: 800, color: '#9898B5',
                 letterSpacing: '0.08em', textTransform: 'uppercase',
@@ -59,7 +59,7 @@ export default function Footer() {
               }}>
                 {t(col.title)}
               </h4>
-              <ul className="flex flex-col items-center lg:items-start" style={{ listStyle: 'none', padding: 0, margin: 0, gap: 8 }}>
+              <ul className="flex flex-col items-start" style={{ listStyle: 'none', padding: 0, margin: 0, gap: 8 }}>
                 {col.items.map((item) => {
                   const href = getHref(item);
                   return (
@@ -85,12 +85,12 @@ export default function Footer() {
         </div>
 
         {/* Bottom bar */}
-        <div className="flex flex-col lg:flex-row items-center lg:justify-between gap-5" style={{
+        <div className="flex flex-col lg:flex-row items-start lg:items-center lg:justify-between gap-5" style={{
           borderTop: '1px solid #F1F1F7',
           paddingTop: 20,
         }}>
           {/* Language and links wrapper */}
-          <div className="flex flex-col lg:flex-row items-center gap-4 lg:gap-6 order-1 lg:order-2">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4 lg:gap-6 order-1 lg:order-2">
             {/* Language Selector */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <svg width="14" height="14" fill="none" stroke="#9898B5" viewBox="0 0 24 24" strokeWidth="2" style={{ flexShrink: 0 }}>
@@ -136,7 +136,7 @@ export default function Footer() {
 
             <span style={{ color: '#E4E4EF', fontSize: 11 }} className="hidden lg:inline-block">|</span>
 
-            <div className="flex items-center gap-4 flex-wrap justify-center">
+            <div className="flex items-center gap-4 flex-wrap justify-start">
               <a href="/contact" style={{ fontSize: 11, color: '#9898B5', fontWeight: 500, textDecoration: 'none', transition: 'color 0.15s' }} className="hover:text-[#111128]">{t('Contact Us')}</a>
               <a href="/privacy" style={{ fontSize: 11, color: '#9898B5', fontWeight: 500, textDecoration: 'none', transition: 'color 0.15s' }} className="hover:text-[#111128]">{t('Privacy Policy')}</a>
               <a href="/terms" style={{ fontSize: 11, color: '#9898B5', fontWeight: 500, textDecoration: 'none', transition: 'color 0.15s' }} className="hover:text-[#111128]">{t('Terms of Service')}</a>
@@ -145,7 +145,7 @@ export default function Footer() {
 
           {/* Copyright line */}
           <p className="order-2 lg:order-1" style={{ fontSize: 11, color: '#9898B5', fontWeight: 500, margin: 0 }}>
-            © {new Date().getFullYear()} ImagePine. {t('All rights reserved.')}
+            © {new Date().getFullYear()} <span className="notranslate">ImagePine</span>. {t('All rights reserved.')}
           </p>
         </div>
       </div>

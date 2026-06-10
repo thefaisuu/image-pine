@@ -887,7 +887,7 @@ export default function Home() {
       {/* ═══ FOOTER ═══ */}
       <footer style={{borderTop:'1px solid #E4E4EF',background:'#F7F7FB',padding:'32px 24px',textAlign:'center'}}>
         <p style={{fontSize:13,color:'#9898B5',fontWeight:500,margin:0}}>
-          <span style={{fontWeight:800,color:'#5B5BD6'}}>ImagePine</span> · Free browser-based image editor · No account needed · 100% private
+          <span className="notranslate" style={{fontWeight:800,color:'#5B5BD6'}}>ImagePine</span> · Free browser-based image editor · No account needed · 100% private
         </p>
       </footer>
 

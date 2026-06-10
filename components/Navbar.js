@@ -53,7 +53,7 @@ export default function Navbar() {
               <path fill="#7342E6" d="M603.36,56.63c-9.62,27.75-19.57,54.57-31.98,83.18c31.9-28.2,64.83-55.77,97.93-83.18H603.36z"/>
             </g>
           </svg>
-          <span style={{ fontWeight: 800, fontSize: 16, color: '#111128', letterSpacing: '-0.03em' }}>
+          <span className="notranslate" style={{ fontWeight: 800, fontSize: 16, color: '#111128', letterSpacing: '-0.03em' }}>
             Image<span style={{ color: '#7342E6' }}>Pine</span>
           </span>
         </a>
