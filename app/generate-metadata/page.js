@@ -991,7 +991,7 @@ export default function GenerateMetadataPage() {
       headers = ['Filename', 'Title', 'Description', 'Keywords'];
     } else if (platform === '123RF') {
       headers = ['Filename', 'Title', 'Description', 'Keywords'];
-    } else if (platform === 'Freepik') {
+    } else if (platform === 'Magnific') {
       headers = ['File name', 'Title', 'Keywords', 'if generated with AI - Prompt', 'Model'];
       delimiter = ';';
     } else if (platform === 'DepositPhotos') {
@@ -1040,7 +1040,7 @@ export default function GenerateMetadataPage() {
           escapeCsv(kws),
           escapeCsv(isEditorial ? 'yes' : 'no')
         ].join(delimiter);
-      } else if (platform === 'Freepik') {
+      } else if (platform === 'Magnific') {
         const promptVal = isAiGenerated ? 'Analyze this image and generate SEO-optimized metadata. Return JSON with title, description, keywords, category.' : '';
         const modelVal = isAiGenerated ? 'meta-llama/llama-4-scout-17b-16e-instruct' : '';
         return [
@@ -1375,7 +1375,7 @@ export default function GenerateMetadataPage() {
                           'Shutterstock',
                           'Vecteezy',
                           '123RF',
-                          'Freepik',
+                          'Magnific',
                           'DepositPhotos',
                           'iStock',
                           'Pond5'
@@ -1728,7 +1728,7 @@ export default function GenerateMetadataPage() {
                           userSelect: 'none'
                         }}
                       >
-                        Mark batch as AI-generated (Freepik CSV)
+                        Mark batch as AI-generated (Magnific)
                       </label>
                     </div>
 
