@@ -5,6 +5,7 @@ import ToolPageShell from '@/components/ToolPageShell';
 import UploadBox from '@/components/UploadBox';
 import { saveAs } from 'file-saver';
 import { saveHistory } from '@/lib/storage';
+import { extractMetadataClientSide } from '@/lib/clientMetadata';
 
 // ── Client-side lossless JPEG stripper ────────────────────────────────────────
 const clientStripJpeg = (arrayBuffer) => {
@@ -180,27 +181,15 @@ export default function MetadataPage() {
         [fileObj.id]: { _loading: true }
       }));
 
-      const formData = new FormData();
-      formData.append('file', fileObj);
-      formData.append('action', 'extract');
+      // Extract entirely in the browser — no server upload, no file size limit
+      const data = await extractMetadataClientSide(fileObj);
 
-      const response = await fetch('/api/metadata', {
-        method: 'POST',
-        body: formData
-      });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || `HTTP error ${response.status}`);
-      }
-
-      const data = await response.json();
       setMetadataMap(prev => ({
         ...prev,
         [fileObj.id]: data
       }));
     } catch (err) {
-      console.error('Error fetching file metadata:', err);
+      console.error('Error reading file metadata:', err);
       setMetadataMap(prev => ({
         ...prev,
         [fileObj.id]: { _error: err.message || 'Error parsing metadata' }
