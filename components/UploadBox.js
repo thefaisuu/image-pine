@@ -43,6 +43,8 @@ export default function UploadBox({
       else if (f === '.webp') map['image/webp'] = ['.webp'];
       else if (f === '.gif')  map['image/gif']  = ['.gif'];
       else if (f === '.svg')  map['image/svg+xml'] = ['.svg'];
+      else if (f === '.avif') map['image/avif'] = ['.avif'];
+      else if (['.tiff', '.tif'].includes(f)) map['image/tiff'] = ['.tiff', '.tif'];
       else if (['.heic', '.heif'].includes(f)) {
         map['image/heic'] = ['.heic'];
         map['image/heif'] = ['.heif'];
