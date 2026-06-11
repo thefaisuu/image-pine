@@ -6,6 +6,69 @@ import UploadBox from '@/components/UploadBox';
 import { saveAs } from 'file-saver';
 import { saveHistory } from '@/lib/storage';
 
+// ── Client-side lossless JPEG stripper ────────────────────────────────────────
+const clientStripJpeg = (arrayBuffer) => {
+  const view = new DataView(arrayBuffer);
+  if (view.getUint16(0, false) !== 0xFFD8) throw new Error('Not a valid JPEG');
+  let offset = 2;
+  const len = view.byteLength;
+  const segs = [new Uint8Array(arrayBuffer, 0, 2)];
+  while (offset < len) {
+    if (offset + 4 > len) { segs.push(new Uint8Array(arrayBuffer, offset, len - offset)); break; }
+    const marker = view.getUint16(offset, false);
+    if (marker === 0xFFDA) { segs.push(new Uint8Array(arrayBuffer, offset, len - offset)); break; }
+    if (marker === 0xFFD9) { segs.push(new Uint8Array(arrayBuffer, offset, 2)); break; }
+    if ((marker & 0xFF00) !== 0xFF00) { offset++; continue; }
+    const segLen = view.getUint16(offset + 2, false) + 2;
+    if (offset + segLen > len) { segs.push(new Uint8Array(arrayBuffer, offset, len - offset)); break; }
+    const keep =
+      marker === 0xFFE0 || marker === 0xFFE2 || marker === 0xFFEE ||
+      marker === 0xFFDB || marker === 0xFFC4 || marker === 0xFFDD ||
+      (marker >= 0xFFC0 && marker <= 0xFFCF && marker !== 0xFFC4 && marker !== 0xFFC8);
+    if (keep) segs.push(new Uint8Array(arrayBuffer, offset, segLen));
+    offset += segLen;
+  }
+  let total = 0; segs.forEach(s => total += s.byteLength);
+  const out = new Uint8Array(total); let cur = 0;
+  segs.forEach(s => { out.set(s, cur); cur += s.byteLength; });
+  return out.buffer;
+};
+
+// ── Client-side lossless PNG stripper ─────────────────────────────────────────
+const clientStripPng = (arrayBuffer) => {
+  const view = new DataView(arrayBuffer);
+  if (view.byteLength < 8 || view.getUint32(0, false) !== 0x89504E47) throw new Error('Not a valid PNG');
+  let offset = 8;
+  const len = view.byteLength;
+  const segs = [new Uint8Array(arrayBuffer, 0, 8)];
+  const keep = ['IHDR','PLTE','IDAT','IEND','iCCP','gAMA','cHRM','sRGB','pHYs','sBIT','tRNS'];
+  while (offset < len) {
+    if (offset + 8 > len) break;
+    const chunkLen = view.getUint32(offset, false);
+    const type = String.fromCharCode(view.getUint8(offset+4),view.getUint8(offset+5),view.getUint8(offset+6),view.getUint8(offset+7));
+    const total = 12 + chunkLen;
+    if (offset + total > len) break;
+    if (keep.includes(type)) segs.push(new Uint8Array(arrayBuffer, offset, total));
+    offset += total;
+    if (type === 'IEND') break;
+  }
+  let totalSize = 0; segs.forEach(s => totalSize += s.byteLength);
+  const out = new Uint8Array(totalSize); let cur = 0;
+  segs.forEach(s => { out.set(s, cur); cur += s.byteLength; });
+  return out.buffer;
+};
+
+// Strip metadata from a File object entirely in the browser (no network)
+const clientStripFile = async (fileObj) => {
+  const arrayBuffer = await fileObj.arrayBuffer();
+  const isPng = fileObj.type === 'image/png' || fileObj.name.toLowerCase().endsWith('.png');
+  try {
+    return isPng ? clientStripPng(arrayBuffer) : clientStripJpeg(arrayBuffer);
+  } catch {
+    return arrayBuffer; // unsupported format — return original unchanged
+  }
+};
+
 export default function MetadataPage() {
   const [files, setFiles] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -171,24 +234,10 @@ export default function MetadataPage() {
     setErrorMsg('');
 
     try {
-      const formData = new FormData();
-      formData.append('file', fileObj);
-      formData.append('action', 'strip');
-
-      const response = await fetch('/api/metadata', {
-        method: 'POST',
-        body: formData
-      });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || `HTTP error ${response.status}`);
-      }
-
-      const blob = await response.blob();
+      const strippedBuffer = await clientStripFile(fileObj);
       const nameWithoutExt = fileObj.name.replace(/\.[^/.]+$/, '');
       const ext = fileObj.name.split('.').pop() || 'jpg';
-      
+      const blob = new Blob([strippedBuffer], { type: fileObj.type || 'application/octet-stream' });
       saveAs(blob, `${nameWithoutExt}_cleaned.${ext}`);
       saveHistory('EXIF Stripper', `${fileObj.name} (Metadata Erased)`);
     } catch (err) {
@@ -210,29 +259,18 @@ export default function MetadataPage() {
       const JSZip = JSZipModule.default;
       const zip = new JSZip();
 
-      for (let i = 0; i < files.length; i++) {
-        const fileObj = files[i];
-        
-        const formData = new FormData();
-        formData.append('file', fileObj);
-        formData.append('action', 'strip');
+      // Strip all files in parallel using client-side processing
+      const results = await Promise.all(
+        files.map(fileObj => clientStripFile(fileObj).then(buf => ({ fileObj, buf })))
+      );
 
-        const response = await fetch('/api/metadata', {
-          method: 'POST',
-          body: formData
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to clean file: ${fileObj.name}`);
-        }
-
-        const blob = await response.blob();
+      results.forEach(({ fileObj, buf }, i) => {
         const nameWithoutExt = fileObj.name.replace(/\.[^/.]+$/, '');
         const ext = fileObj.name.split('.').pop() || 'jpg';
-        
+        const blob = new Blob([buf], { type: fileObj.type || 'application/octet-stream' });
         zip.file(`${nameWithoutExt}_cleaned.${ext}`, blob);
         setProcessedCount(i + 1);
-      }
+      });
 
       const zipBlob = await zip.generateAsync({ type: 'blob' });
       saveAs(zipBlob, 'cleaned_images.zip');
@@ -252,29 +290,19 @@ export default function MetadataPage() {
     setErrorMsg('');
 
     try {
-      for (let i = 0; i < files.length; i++) {
-        const fileObj = files[i];
+      // Strip all files in parallel using client-side processing
+      const results = await Promise.all(
+        files.map(fileObj => clientStripFile(fileObj).then(buf => ({ fileObj, buf })))
+      );
 
-        const formData = new FormData();
-        formData.append('file', fileObj);
-        formData.append('action', 'strip');
-
-        const response = await fetch('/api/metadata', {
-          method: 'POST',
-          body: formData
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to clean file: ${fileObj.name}`);
-        }
-
-        const blob = await response.blob();
+      results.forEach(({ fileObj, buf }, i) => {
         const nameWithoutExt = fileObj.name.replace(/\.[^/.]+$/, '');
         const ext = fileObj.name.split('.').pop() || 'jpg';
-
+        const blob = new Blob([buf], { type: fileObj.type || 'application/octet-stream' });
         saveAs(blob, `${nameWithoutExt}_cleaned.${ext}`);
         setProcessedCount(i + 1);
-      }
+      });
+
       saveHistory('EXIF Stripper', `${files.length} images cleaned and downloaded`);
     } catch (e) {
       console.error(e);
@@ -427,7 +455,7 @@ export default function MetadataPage() {
                         width: 28, height: 28, border: '3px solid #EEF0FF', borderTopColor: '#5B5BD6',
                         borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 12px'
                       }} />
-                      <span>Analyzing image file headers...</span>
+                      <span>Analyzing image data...</span>
                       <style jsx>{`
                         @keyframes spin { to { transform: rotate(360deg); } }
                       `}</style>
