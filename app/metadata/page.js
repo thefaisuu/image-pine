@@ -446,7 +446,7 @@ export default function MetadataPage() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                       
                       {/* AI Provenance Banner */}
-                      {currentMetadata.provenance && (
+                      {currentMetadata.provenance && currentMetadata.provenance.type !== 'none' && (
                         <div style={{
                           borderRadius: 16,
                           padding: '14px',
