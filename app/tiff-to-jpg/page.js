@@ -17,13 +17,8 @@ const _FEATURES = [
 
 const _STEPS = [
   { n: '1', title: 'Upload TIFF', desc: 'Select your TIFF/TIF image file.' },
-  { n: '2', title: 'Convert', desc: 'Converts to JPEG instantly.' },
-  { n: '3', title: 'Download JPG', desc: 'Save your compatible JPEG.' }
-];
-
-const _FAQS = [
-  { q: 'Why convert TIFF to JPG?', a: 'TIFF (Tagged Image File Format) files are high-quality but extremely large and unsupported by standard web browsers. Converting to JPG compresses the files dramatically and ensures they can be opened on any device.' },
-  { q: 'Are files uploaded?', a: 'No. Everything runs in your browser.' }
+  { n: '2', title: 'Convert', desc: 'Converts all pages to JPEGs.' },
+  { n: '3', title: 'Download', desc: 'Save single JPEG or download all in a ZIP.' }
 ];
 
 export default function TiffToJpgPage() {
@@ -38,9 +33,10 @@ export default function TiffToJpgPage() {
   const [stripMetadata, setStripMetadata] = useState(true);
 
   // Output states
-  const [convertedUrl, setConvertedUrl] = useState(null);
-  const [convertedBlob, setConvertedBlob] = useState(null);
+  const [pages, setPages] = useState([]); // Array of { number: number, blob: Blob, url: string }
   const [isConverting, setIsConverting] = useState(false);
+  const [processedCount, setProcessedCount] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
 
   // Manage object URLs lifetime safely to prevent memory leaks and premature revocation
@@ -58,21 +54,33 @@ export default function TiffToJpgPage() {
     };
   }, []);
 
+  // Clean up page URLs on selection change or unmount
+  useEffect(() => {
+    return () => {
+      pages.forEach((p) => {
+        if (p.url) URL.revokeObjectURL(p.url);
+      });
+    };
+  }, [pages]);
+
   const convertFile = async (selectedFile) => {
     setIsConverting(true);
+    setProcessedCount(0);
+    setTotalCount(0);
     setErrorMsg('');
-    setConvertedBlob(null);
-    if (convertedUrl) {
-      URL.revokeObjectURL(convertedUrl);
-      setConvertedUrl(null);
-    }
+
+    // Revoke old URLs
+    pages.forEach((p) => {
+      if (p.url) URL.revokeObjectURL(p.url);
+    });
+    setPages([]);
 
     try {
       // 1. Read file as ArrayBuffer
       const arrayBuffer = await new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (e) => resolve(e.target.result);
-        reader.onerror = (e) => reject(new Error('Failed to read file as ArrayBuffer.'));
+        reader.onerror = () => reject(new Error('Failed to read file.'));
         reader.readAsArrayBuffer(selectedFile);
       });
 
@@ -85,77 +93,90 @@ export default function TiffToJpgPage() {
       if (!ifds || ifds.length === 0) {
         throw new Error('Invalid TIFF structure. Could not find image directories.');
       }
-      UTIF.decodeImage(arrayBuffer, ifds[0]);
-      const rgba = UTIF.toRGBA8(ifds[0]);
 
-      // 4. Draw to canvas
-      const canvas = document.createElement('canvas');
-      let w = ifds[0].width;
-      let h = ifds[0].height;
+      const numPages = ifds.length;
+      setTotalCount(numPages);
 
-      // Handle custom resizing if selected
-      if (resizeMode === 'custom') {
-        const numW = parseInt(customWidth, 10);
-        const numH = parseInt(customHeight, 10);
-        if (!isNaN(numW) && !isNaN(numH)) {
-          w = numW;
-          h = numH;
-        } else if (!isNaN(numW)) {
-          h = Math.round(h * (numW / ifds[0].width));
-          w = numW;
-        } else if (!isNaN(numH)) {
-          w = Math.round(w * (numH / ifds[0].height));
-          h = numH;
+      const renderedPages = [];
+
+      for (let i = 0; i < numPages; i++) {
+        UTIF.decodeImage(arrayBuffer, ifds[i]);
+        const rgba = UTIF.toRGBA8(ifds[i]);
+
+        const canvas = document.createElement('canvas');
+        let w = ifds[i].width;
+        let h = ifds[i].height;
+
+        // Handle custom resizing if selected
+        if (resizeMode === 'custom') {
+          const numW = parseInt(customWidth, 10);
+          const numH = parseInt(customHeight, 10);
+          if (!isNaN(numW) && !isNaN(numH)) {
+            w = numW;
+            h = numH;
+          } else if (!isNaN(numW)) {
+            h = Math.round(h * (numW / ifds[i].width));
+            w = numW;
+          } else if (!isNaN(numH)) {
+            w = Math.round(w * (numH / ifds[i].height));
+            h = numH;
+          }
         }
+
+        canvas.width = w;
+        canvas.height = h;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          throw new Error('Canvas 2D context not available.');
+        }
+
+        // Draw decoded TIFF onto a temporary canvas of original size
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = ifds[i].width;
+        tempCanvas.height = ifds[i].height;
+        const tempCtx = tempCanvas.getContext('2d');
+        if (!tempCtx) {
+          throw new Error('Temporary Canvas context not available.');
+        }
+        const imgData = tempCtx.createImageData(tempCanvas.width, tempCanvas.height);
+        imgData.data.set(rgba);
+        tempCtx.putImageData(imgData, 0, 0);
+
+        // Fill background white because JPEG doesn't support transparency
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, w, h);
+
+        // Draw tempCanvas onto target canvas
+        ctx.drawImage(tempCanvas, 0, 0, w, h);
+
+        // Generate JPG Blob
+        const blob = await new Promise((resolve, reject) => {
+          canvas.toBlob(
+            (b) => {
+              if (b) resolve(b);
+              else reject(new Error('Failed to generate JPEG blob.'));
+            },
+            'image/jpeg',
+            quality / 100
+          );
+        });
+
+        const url = URL.createObjectURL(blob);
+        renderedPages.push({
+          number: i + 1,
+          blob,
+          url,
+        });
+
+        setProcessedCount(i + 1);
       }
 
-      canvas.width = w;
-      canvas.height = h;
-
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        throw new Error('Canvas 2D context not available.');
-      }
-
-      // Draw decoded TIFF onto a temporary canvas of original size first
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = ifds[0].width;
-      tempCanvas.height = ifds[0].height;
-      const tempCtx = tempCanvas.getContext('2d');
-      if (!tempCtx) {
-        throw new Error('Temporary Canvas context not available.');
-      }
-      const imgData = tempCtx.createImageData(tempCanvas.width, tempCanvas.height);
-      imgData.data.set(rgba);
-      tempCtx.putImageData(imgData, 0, 0);
-
-      // Fill background white because JPEG doesn't support transparency
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(0, 0, w, h);
-
-      // Draw tempCanvas onto target canvas
-      ctx.drawImage(tempCanvas, 0, 0, w, h);
-
-      // 5. Generate JPG Blob
-      const resultBlob = await new Promise((resolve, reject) => {
-        canvas.toBlob(
-          (blob) => {
-            if (blob) resolve(blob);
-            else reject(new Error('Failed to generate JPEG blob from canvas.'));
-          },
-          'image/jpeg',
-          quality / 100
-        );
-      });
-
-      const url = URL.createObjectURL(resultBlob);
-      
-      setConvertedBlob(resultBlob);
-      setConvertedUrl(url);
+      setPages(renderedPages);
       setIsConverting(false);
 
-      const newName = selectedFile.name.replace(/\.[^/.]+$/, '') + '.jpg';
-      saveHistory('TIFF to JPG Converter', newName);
+      const displayPagesCount = numPages > 1 ? `${numPages} pages` : '1 page';
+      saveHistory('TIFF to JPG Converter', `${selectedFile.name} (${displayPagesCount})`);
     } catch (err) {
       console.error(err);
       setErrorMsg(err.message || 'TIFF conversion failed. Please ensure it is a valid TIFF/TIF file.');
@@ -168,11 +189,12 @@ export default function TiffToJpgPage() {
       setFile(selectedList[0]);
     } else {
       setFile(null);
-      setConvertedBlob(null);
-      if (convertedUrl) {
-        URL.revokeObjectURL(convertedUrl);
-        setConvertedUrl(null);
-      }
+      pages.forEach((p) => {
+        if (p.url) URL.revokeObjectURL(p.url);
+      });
+      setPages([]);
+      setProcessedCount(0);
+      setTotalCount(0);
       setErrorMsg('');
     }
   };
@@ -183,20 +205,40 @@ export default function TiffToJpgPage() {
     }
   }, [file, quality, resizeMode, customWidth, customHeight]);
 
-  // Clean up object URLs on unmount
-  useEffect(() => {
-    return () => {
-      if (convertedUrl) {
-        URL.revokeObjectURL(convertedUrl);
-      }
-    };
-  }, [convertedUrl]);
-
-  const downloadJpgImage = () => {
-    if (!convertedBlob || !file) return;
+  const downloadSinglePage = (p) => {
+    if (!file) return;
     const baseName = file.name.replace(/\.[^/.]+$/, '');
-    const newName = `${baseName}.jpg`;
-    saveAs(convertedBlob, newName);
+    const newName = `${baseName}_page_${p.number}.jpg`;
+    saveAs(p.blob, newName);
+  };
+
+  const downloadAllImages = async () => {
+    if (pages.length === 0 || !file) return;
+
+    if (pages.length === 1) {
+      const baseName = file.name.replace(/\.[^/.]+$/, '');
+      const newName = `${baseName}.jpg`;
+      saveAs(pages[0].blob, newName);
+      return;
+    }
+
+    try {
+      const JSZipModule = await import('jszip');
+      const JSZip = JSZipModule.default;
+      const zip = new JSZip();
+
+      const baseName = file.name.replace(/\.[^/.]+$/, '');
+
+      pages.forEach((p) => {
+        zip.file(`${baseName}_page_${p.number}.jpg`, p.blob);
+      });
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      saveAs(zipBlob, `${baseName}_jpg_images.zip`);
+    } catch (err) {
+      console.error(err);
+      setErrorMsg('Failed to build ZIP archive. Please try again.');
+    }
   };
 
   const formatSize = (bytes) => {
@@ -214,7 +256,7 @@ export default function TiffToJpgPage() {
     },
     {
       q: "Does this support multi-page TIFFs?",
-      a: "This tool currently decodes and converts the first page of the TIFF file to JPEG."
+      a: "Yes! If your TIFF file contains multiple pages, our tool decodes all pages and packages them into a single, compressed ZIP file containing all the converted JPEGs."
     },
     {
       q: "Can I resize my images?",
@@ -268,20 +310,45 @@ export default function TiffToJpgPage() {
               </div>
             </div>
 
-            {/* Middle Column: Large Preview */}
+            {/* Middle Column: Large Preview or Previews Grid */}
             <div className="lg:col-span-6" style={{ background: "#fff", border: "1px solid #E4E4EF", borderRadius: 20, padding: "24px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)", display: "flex", flexDirection: "column", gap: 14 }}>
-              <h4 style={{ fontSize: 10, fontWeight: 800, color: "#9898B5", textTransform: "uppercase", letterSpacing: "0.08em" }}>JPG Preview</h4>
-                  <div style={{ border: "1.5px solid #E4E4EF", borderRadius: 14, padding: 16, minHeight: 380, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden", background: "repeating-conic-gradient(#F1F1F7 0% 25%, #fff 0% 50%) 0 0 / 16px 16px" }}>
-                    {convertedUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={convertedUrl} alt="JPG Preview" style={{ maxHeight: 480, maxWidth: "100%", objectFit: "contain", borderRadius: 8, boxShadow: "0 4px 20px rgba(0,0,0,0.08)", display: "block" }} className=" max-w-full object-contain rounded-lg border border-bordercolor/40 shadow-sm" />
+              <h4 style={{ fontSize: 10, fontWeight: 800, color: "#9898B5", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                {pages.length > 1 ? 'Decoded Pages' : 'JPG Preview'}
+              </h4>
+                  <div style={{ border: "1.5px solid #E4E4EF", borderRadius: 14, padding: 16, minHeight: 380, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden", background: "repeating-conic-gradient(#F1F1F7 0% 25%, #fff 0% 50%) 0 0 / 16px 16px" }} className="w-full">
+                    {pages.length > 0 ? (
+                      pages.length === 1 ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={pages[0].url} alt="JPG Preview" style={{ maxHeight: 480, maxWidth: "100%", objectFit: "contain", borderRadius: 8, boxShadow: "0 4px 20px rgba(0,0,0,0.08)", display: "block" }} className=" max-w-full object-contain rounded-lg border border-bordercolor/40 shadow-sm" />
+                      ) : (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 w-full max-h-[500px] overflow-y-auto pr-1 scrollbar-thin">
+                          {pages.map((p) => (
+                            <div key={p.number} className="border border-bordercolor bg-white rounded-xl p-3 flex flex-col gap-2 shadow-sm hover:border-primary/50 transition-colors">
+                              <span className="text-[10px] font-black text-gray-400">PAGE {p.number}</span>
+                              <div className="aspect-[3/4] w-full flex items-center justify-center bg-white border border-bordercolor/60 rounded-lg overflow-hidden relative group">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={p.url} alt={`Page ${p.number}`} className="max-h-full max-w-full object-contain" />
+                                
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                  <button
+                                    onClick={() => downloadSinglePage(p)}
+                                    className="bg-primary hover:bg-primary/95 text-white rounded-lg p-2 font-bold text-[10px] shadow"
+                                  >
+                                    Download JPG
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )
                     ) : isConverting ? (
-                      <div className="flex items-center gap-1.5 text-xs text-primary font-semibold">
-                        <svg className="animate-spin h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24">
+                      <div className="flex flex-col items-center gap-3 text-xs text-primary font-semibold">
+                        <svg className="animate-spin h-6 w-6 text-primary" fill="none" viewBox="0 0 24 24">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                         </svg>
-                        Decoding TIFF...
+                        <span>Decoding TIFF (page {processedCount} of {totalCount})...</span>
                       </div>
                     ) : (
                       <div className="text-xs text-gray-400 font-medium text-center">
@@ -374,16 +441,16 @@ export default function TiffToJpgPage() {
                     </div>
                   </div>
 
-                  {convertedBlob && (
+                  {pages.length > 0 && (
                     <div className="bg-lightbg/60 border border-bordercolor rounded-xl p-4 flex flex-col gap-2">
-                      <span className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 font-semibold font-bold">File Sizes</span>
+                      <span className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 font-semibold">Details</span>
                       <div className="flex justify-between items-center text-xs font-semibold text-textmain">
-                        <span>Original (TIFF):</span>
-                        <span className="font-mono text-gray-500">{formatSize(file.size)}</span>
+                        <span>Pages Extracted:</span>
+                        <span className="font-mono text-primary font-bold">{pages.length}</span>
                       </div>
                       <div className="flex justify-between items-center text-xs font-semibold text-textmain">
-                        <span>Converted (JPG):</span>
-                        <span className="font-mono text-primary font-bold">{formatSize(convertedBlob.size)}</span>
+                        <span>Original Size:</span>
+                        <span className="font-mono text-gray-500">{formatSize(file.size)}</span>
                       </div>
                     </div>
                   )}
@@ -393,14 +460,14 @@ export default function TiffToJpgPage() {
                   <div className="pt-3 border-t border-bordercolor/60">
                     <button
                       type="button"
-                      onClick={downloadJpgImage}
-                      disabled={isConverting || !convertedBlob}
+                      onClick={downloadAllImages}
+                      disabled={isConverting || pages.length === 0}
                       style={{ width: "100%", padding: "13px", fontSize: 13, fontWeight: 800, borderRadius: 12, border: "none", cursor: "pointer", background: "linear-gradient(135deg, #5B5BD6 0%, #7C3AED 100%)", color: "#fff", boxShadow: "0 4px 14px rgba(91,91,214,0.30)", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "all 0.18s" }}
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                       </svg>
-                      Download JPG Image
+                      {pages.length > 1 ? 'Download JPGs (ZIP)' : 'Download JPG Image'}
                     </button>
                   </div>
             </div>
