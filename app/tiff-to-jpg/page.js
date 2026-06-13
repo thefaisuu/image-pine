@@ -7,33 +7,33 @@ import ConverterDetails from '@/components/ConverterDetails';
 import ToolPageShell from '@/components/ToolPageShell';
 
 const _FEATURES = [
-  { icon: (<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round"><path d="M8 3l4 4-4 4M16 21l-4-4 4-4"/><path d="M12 7H5a2 2 0 00-2 2v2M12 17h7a2 2 0 002-2v-2"/></svg>), title: 'Lossless PNG', desc: 'Convert JPEG to PNG with transparency support.' },
-  { icon: (<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>), title: '100% Private', desc: 'Conversion in your browser - nothing uploaded.' },
-  { icon: (<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>), title: 'Instant', desc: 'Canvas API converts in milliseconds.' },
-  { icon: (<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round"><rect x="2" y="2" width="9" height="9" rx="1"/><rect x="13" y="2" width="9" height="9" rx="1"/><rect x="2" y="13" width="9" height="9" rx="1"/><rect x="13" y="13" width="9" height="9" rx="1"/></svg>), title: 'Batch Convert', desc: 'Convert multiple JPGs simultaneously.' },
-  { icon: (<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round"><path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>), title: 'Free Forever', desc: 'No account, no watermark.' },
-  { icon: (<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>), title: 'Any JPEG', desc: 'Supports .jpg and .jpeg up to 15 MB.' }
+  { icon: (<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round"><path d="M8 3l4 4-4 4M16 21l-4-4 4-4"/><path d="M12 7H5a2 2 0 00-2 2v2M12 17h7a2 2 0 002-2v-2"/></svg>), title: 'Universal JPEG', desc: 'JPEG works everywhere - email, social, websites.' },
+  { icon: (<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>), title: 'Quality Control', desc: 'Adjust output JPEG quality from 5% to 100%.' },
+  { icon: (<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>), title: '100% Private', desc: 'Runs locally - no uploads ever.' },
+  { icon: (<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>), title: 'Instant', desc: 'Conversion finishes in milliseconds.' },
+  { icon: (<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round"><rect x="2" y="2" width="9" height="9" rx="1"/><rect x="13" y="2" width="9" height="9" rx="1"/><rect x="2" y="13" width="9" height="9" rx="1"/><rect x="13" y="13" width="9" height="9" rx="1"/></svg>), title: 'Batch Convert', desc: 'Convert multiple TIFF files at once.' },
+  { icon: (<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round"><path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>), title: 'Free Forever', desc: 'No account, no watermark.' }
 ];
 
 const _STEPS = [
-  { n: '1', title: 'Upload JPG', desc: 'Select or drag your JPEG/JPG.' },
-  { n: '2', title: 'Convert', desc: 'Auto-converts to PNG.' },
-  { n: '3', title: 'Download PNG', desc: 'Save your PNG file.' }
+  { n: '1', title: 'Upload TIFF', desc: 'Select your TIFF/TIF image file.' },
+  { n: '2', title: 'Convert', desc: 'Converts to JPEG instantly.' },
+  { n: '3', title: 'Download JPG', desc: 'Save your compatible JPEG.' }
 ];
 
 const _FAQS = [
-  { q: 'Will converting improve quality?', a: 'PNG prevents further lossy compression but cannot recover lost JPEG detail.' },
-  { q: 'Are files uploaded?', a: 'No. Conversion is 100% local.' }
+  { q: 'Why convert TIFF to JPG?', a: 'TIFF (Tagged Image File Format) files are high-quality but extremely large and unsupported by standard web browsers. Converting to JPG compresses the files dramatically and ensures they can be opened on any device.' },
+  { q: 'Are files uploaded?', a: 'No. Everything runs in your browser.' }
 ];
 
-export default function JpgToPngPage() {
+export default function TiffToJpgPage() {
   const [file, setFile] = useState(null);
+  const [quality, setQuality] = useState(90);
 
   // Advanced options states
   const [resizeMode, setResizeMode] = useState('keep'); // 'keep' | 'custom'
   const [customWidth, setCustomWidth] = useState('');
   const [customHeight, setCustomHeight] = useState('');
-  const [transparentColor, setTransparentColor] = useState('');
   const [autoOrient, setAutoOrient] = useState(true);
   const [stripMetadata, setStripMetadata] = useState(true);
 
@@ -58,128 +58,130 @@ export default function JpgToPngPage() {
     };
   }, []);
 
-  const handleFileSelect = (selectedList) => {
-    if (selectedList.length > 0) {
-      setFile(selectedList[0]);
-    } else {
-      setFile(null);
-    }
+  const convertFile = async (selectedFile) => {
+    setIsConverting(true);
+    setErrorMsg('');
     setConvertedBlob(null);
     if (convertedUrl) {
       URL.revokeObjectURL(convertedUrl);
       setConvertedUrl(null);
     }
-    setErrorMsg('');
+
+    try {
+      // 1. Read file as ArrayBuffer
+      const arrayBuffer = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = (e) => reject(new Error('Failed to read file as ArrayBuffer.'));
+        reader.readAsArrayBuffer(selectedFile);
+      });
+
+      // 2. Load UTIF dynamically
+      const utifModule = await import('utif');
+      const UTIF = utifModule.default || utifModule;
+
+      // 3. Decode TIFF
+      const ifds = UTIF.decode(arrayBuffer);
+      if (!ifds || ifds.length === 0) {
+        throw new Error('Invalid TIFF structure. Could not find image directories.');
+      }
+      UTIF.decodeImage(arrayBuffer, ifds[0]);
+      const rgba = UTIF.toRGBA8(ifds[0]);
+
+      // 4. Draw to canvas
+      const canvas = document.createElement('canvas');
+      let w = ifds[0].width;
+      let h = ifds[0].height;
+
+      // Handle custom resizing if selected
+      if (resizeMode === 'custom') {
+        const numW = parseInt(customWidth, 10);
+        const numH = parseInt(customHeight, 10);
+        if (!isNaN(numW) && !isNaN(numH)) {
+          w = numW;
+          h = numH;
+        } else if (!isNaN(numW)) {
+          h = Math.round(h * (numW / ifds[0].width));
+          w = numW;
+        } else if (!isNaN(numH)) {
+          w = Math.round(w * (numH / ifds[0].height));
+          h = numH;
+        }
+      }
+
+      canvas.width = w;
+      canvas.height = h;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        throw new Error('Canvas 2D context not available.');
+      }
+
+      // Draw decoded TIFF onto a temporary canvas of original size first
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = ifds[0].width;
+      tempCanvas.height = ifds[0].height;
+      const tempCtx = tempCanvas.getContext('2d');
+      if (!tempCtx) {
+        throw new Error('Temporary Canvas context not available.');
+      }
+      const imgData = tempCtx.createImageData(tempCanvas.width, tempCanvas.height);
+      imgData.data.set(rgba);
+      tempCtx.putImageData(imgData, 0, 0);
+
+      // Fill background white because JPEG doesn't support transparency
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, w, h);
+
+      // Draw tempCanvas onto target canvas
+      ctx.drawImage(tempCanvas, 0, 0, w, h);
+
+      // 5. Generate JPG Blob
+      const resultBlob = await new Promise((resolve, reject) => {
+        canvas.toBlob(
+          (blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Failed to generate JPEG blob from canvas.'));
+          },
+          'image/jpeg',
+          quality / 100
+        );
+      });
+
+      const url = URL.createObjectURL(resultBlob);
+      
+      setConvertedBlob(resultBlob);
+      setConvertedUrl(url);
+      setIsConverting(false);
+
+      const newName = selectedFile.name.replace(/\.[^/.]+$/, '') + '.jpg';
+      saveHistory('TIFF to JPG Converter', newName);
+    } catch (err) {
+      console.error(err);
+      setErrorMsg(err.message || 'TIFF conversion failed. Please ensure it is a valid TIFF/TIF file.');
+      setIsConverting(false);
+    }
+  };
+
+  const handleFileSelect = (selectedList) => {
+    if (selectedList.length > 0) {
+      setFile(selectedList[0]);
+    } else {
+      setFile(null);
+      setConvertedBlob(null);
+      if (convertedUrl) {
+        URL.revokeObjectURL(convertedUrl);
+        setConvertedUrl(null);
+      }
+      setErrorMsg('');
+    }
   };
 
   useEffect(() => {
-    if (!file) return;
-
-    let active = true;
-    setIsConverting(true);
-    setErrorMsg('');
-
-    const img = new Image();
-    img.onload = () => {
-      try {
-        const canvas = document.createElement('canvas');
-        
-        let w = img.naturalWidth || img.width;
-        let h = img.naturalHeight || img.height;
-
-        if (resizeMode === 'custom') {
-          const numW = parseInt(customWidth, 10);
-          const numH = parseInt(customHeight, 10);
-          if (!isNaN(numW) && !isNaN(numH)) {
-            w = numW;
-            h = numH;
-          } else if (!isNaN(numW)) {
-            h = Math.round(h * (numW / w));
-            w = numW;
-          } else if (!isNaN(numH)) {
-            w = Math.round(w * (numH / h));
-            h = numH;
-          }
-        }
-
-        canvas.width = w;
-        canvas.height = h;
-        
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          throw new Error('Canvas 2D context not available.');
-        }
-
-        // Draw image onto canvas
-        ctx.drawImage(img, 0, 0, w, h);
-
-        // Transparency color keyer
-        if (transparentColor) {
-          const hex = transparentColor.replace('#', '');
-          const rMatch = parseInt(hex.substring(0, 2), 16);
-          const gMatch = parseInt(hex.substring(2, 4), 16);
-          const bMatch = parseInt(hex.substring(4, 6), 16);
-          
-          if (!isNaN(rMatch) && !isNaN(gMatch) && !isNaN(bMatch)) {
-            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const data = imgData.data;
-            const tolerance = 20;
-            for (let i = 0; i < data.length; i += 4) {
-              const r = data[i];
-              const g = data[i+1];
-              const b = data[i+2];
-              if (
-                Math.abs(r - rMatch) < tolerance &&
-                Math.abs(g - gMatch) < tolerance &&
-                Math.abs(b - bMatch) < tolerance
-              ) {
-                data[i+3] = 0;
-              }
-            }
-            ctx.putImageData(imgData, 0, 0);
-          }
-        }
-
-        canvas.toBlob(
-          (blob) => {
-            if (!active) return;
-            if (!blob) {
-              throw new Error('Failed to generate PNG blob.');
-            }
-
-            if (convertedUrl) {
-              URL.revokeObjectURL(convertedUrl);
-            }
-
-            const url = URL.createObjectURL(blob);
-            setConvertedBlob(blob);
-            setConvertedUrl(url);
-            setIsConverting(false);
-          },
-          'image/png'
-        );
-      } catch (err) {
-        if (active) {
-          console.error(err);
-          setErrorMsg(err.message || 'Error occurred during conversion.');
-          setIsConverting(false);
-        }
-      }
-    };
-
-    img.onerror = () => {
-      if (active) {
-        setErrorMsg('Failed to process image source.');
-        setIsConverting(false);
-      }
-    };
-
-    img.src = file.preview || URL.createObjectURL(file);
-
-    return () => {
-      active = false;
-    };
-  }, [file, resizeMode, customWidth, customHeight, transparentColor]);
+    if (file) {
+      convertFile(file);
+    }
+  }, [file, quality, resizeMode, customWidth, customHeight]);
 
   // Clean up object URLs on unmount
   useEffect(() => {
@@ -190,12 +192,11 @@ export default function JpgToPngPage() {
     };
   }, [convertedUrl]);
 
-  const downloadPngImage = () => {
+  const downloadJpgImage = () => {
     if (!convertedBlob || !file) return;
     const baseName = file.name.replace(/\.[^/.]+$/, '');
-    const newName = `${baseName}.png`;
+    const newName = `${baseName}.jpg`;
     saveAs(convertedBlob, newName);
-    saveHistory('JPG to PNG Converter', newName);
   };
 
   const formatSize = (bytes) => {
@@ -206,39 +207,33 @@ export default function JpgToPngPage() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
-  // State for collapsible FAQs
-  const [openFaqIndex, setOpenFaqIndex] = useState(null);
-  const toggleFaq = (index) => {
-    setOpenFaqIndex(openFaqIndex === index ? null : index);
-  };
-
   const faqs = [
     {
-      q: "Why should I convert JPG to PNG?",
-      a: "PNG is a lossless image format. Converting to PNG is ideal if you need transparency support or want to avoid compression artifacts when saving the file repeatedly."
+      q: "Does JPEG support TIFF transparency?",
+      a: "No. The JPEG format does not support alpha transparency. Any transparent background in your TIFF file will convert to solid white."
     },
     {
-      q: "How does the transparent background feature work?",
-      a: "Under Advanced Options, select a color (e.g. solid white #FFFFFF or solid black) using the color selector. Our canvas engine will key out that color and replace it with a transparent channel."
+      q: "Does this support multi-page TIFFs?",
+      a: "This tool currently decodes and converts the first page of the TIFF file to JPEG."
     },
     {
-      q: "Can I resize the image while converting to PNG?",
-      a: "Yes! Enable 'Custom size' in the Resize dropdown to set your desired export dimensions."
+      q: "Can I resize my images?",
+      a: "Yes. You can select 'Custom size' in the Resize dropdown and enter custom pixel dimensions."
     },
     {
-      q: "Are my photos kept private?",
-      a: "Absolutely. The conversion is fully client-side and runs inside your browser sandbox. Your images are never sent to external servers."
+      q: "Are my TIFF files uploaded to a server?",
+      a: "No. All conversions happen locally in your browser to guarantee absolute security."
     }
   ];
 
   return (
     <ToolPageShell
-      title="JPG to PNG Converter"
-      subtitle="Convert JPEG images to lossless PNG format with transparency support. Free, instant, browser-based."
+      title="TIFF to JPG Converter"
+      subtitle="Convert TIFF files to JPG format. Free, browser-based, no upload required."
       features={_FEATURES}
       steps={_STEPS}
-      faqs={_FAQS}
-      seoText="Convert JPG to PNG online for free. Transform JPEG to lossless PNG with transparency support in your browser. No uploads."
+      faqs={faqs}
+      seoText="Convert TIFF to JPG online for free. Transform TIFF to universally compatible JPEG in your browser. No uploads."
     >
       <div className="flex flex-col gap-6">
         {/* Workspace */}
@@ -246,7 +241,7 @@ export default function JpgToPngPage() {
           <div style={{ maxWidth: 680, margin: '0 auto', width: '100%' }}>
             <UploadBox 
               onFileSelect={handleFileSelect} 
-              acceptedFormats={['.jpg', '.jpeg']}
+              acceptedFormats={['.tiff', '.tif']}
               multiple={false} 
             />
           </div>
@@ -261,10 +256,11 @@ export default function JpgToPngPage() {
               </div>
 
               <div className="p-3 bg-lightbg/45 border border-bordercolor/60 rounded-xl flex items-center gap-3">
-                {file.preview && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={file.preview} alt="Original Thumb" className="w-12 h-12 object-cover rounded-lg border border-bordercolor" />
-                )}
+                <div className="p-2 bg-white border border-bordercolor rounded-lg text-primary flex-shrink-0">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
                 <div className="min-w-0 flex-grow">
                   <p className="text-xs font-bold text-textmain truncate" title={file.name}>{file.name}</p>
                   <p className="text-[10px] text-gray-400 font-medium mt-0.5">Size: {formatSize(file.size)}</p>
@@ -274,18 +270,22 @@ export default function JpgToPngPage() {
 
             {/* Middle Column: Large Preview */}
             <div className="lg:col-span-6" style={{ background: "#fff", border: "1px solid #E4E4EF", borderRadius: 20, padding: "24px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)", display: "flex", flexDirection: "column", gap: 14 }}>
-              <h4 style={{ fontSize: 10, fontWeight: 800, color: "#9898B5", textTransform: "uppercase", letterSpacing: "0.08em" }}>PNG Preview</h4>
+              <h4 style={{ fontSize: 10, fontWeight: 800, color: "#9898B5", textTransform: "uppercase", letterSpacing: "0.08em" }}>JPG Preview</h4>
                   <div style={{ border: "1.5px solid #E4E4EF", borderRadius: 14, padding: 16, minHeight: 380, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden", background: "repeating-conic-gradient(#F1F1F7 0% 25%, #fff 0% 50%) 0 0 / 16px 16px" }}>
                     {convertedUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={convertedUrl} alt="PNG Preview" style={{ maxHeight: 480, maxWidth: "100%", objectFit: "contain", borderRadius: 8, boxShadow: "0 4px 20px rgba(0,0,0,0.08)", display: "block" }} className=" max-w-full object-contain rounded-lg border border-bordercolor/40 shadow-sm" />
-                    ) : (
+                      <img src={convertedUrl} alt="JPG Preview" style={{ maxHeight: 480, maxWidth: "100%", objectFit: "contain", borderRadius: 8, boxShadow: "0 4px 20px rgba(0,0,0,0.08)", display: "block" }} className=" max-w-full object-contain rounded-lg border border-bordercolor/40 shadow-sm" />
+                    ) : isConverting ? (
                       <div className="flex items-center gap-1.5 text-xs text-primary font-semibold">
                         <svg className="animate-spin h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                         </svg>
-                        Converting...
+                        Decoding TIFF...
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-400 font-medium text-center">
+                        Conversion failed or was cancelled
                       </div>
                     )}
                   </div>
@@ -293,7 +293,7 @@ export default function JpgToPngPage() {
 
             {/* Right Column: Controls & Settings */}
             <div className="lg:col-span-3" style={{ background: "#fff", border: "1px solid #E4E4EF", borderRadius: 20, padding: "24px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)", display: "flex", flexDirection: "column", gap: 16 }}>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 font-semibold">Convert Settings</h4>
+              <h4 style={{ fontSize: 10, fontWeight: 800, color: "#9898B5", textTransform: "uppercase", letterSpacing: "0.08em" }}>Convert Settings</h4>
 
                   {/* Advanced Options Group */}
                   <div className="bg-lightbg/40 border border-bordercolor rounded-xl p-4 flex flex-col gap-4">
@@ -330,24 +330,21 @@ export default function JpgToPngPage() {
                       )}
                     </div>
 
-                    {/* Transparent Color */}
+                    {/* Quality */}
                     <div>
-                      <label className="block text-xs font-bold text-textmain mb-1">Choose a color to make transparent?</label>
-                      <div className="flex items-center gap-2">
-                        <input 
-                          type="color" 
-                          value={transparentColor || '#ffffff'} 
-                          onChange={(e) => setTransparentColor(e.target.value)}
-                          className="h-8 w-8 border border-bordercolor rounded cursor-pointer p-0 bg-transparent"
-                        />
-                        <input 
-                          type="text" 
-                          placeholder="#FFFFFF" 
-                          value={transparentColor} 
-                          onChange={(e) => setTransparentColor(e.target.value)}
-                          className="w-full text-xs border border-bordercolor rounded px-2 py-1"
-                        />
+                      <div className="flex justify-between items-center mb-1.5">
+                        <label className="text-xs font-bold text-textmain">Compress Output Image</label>
+                        <span className="text-xs font-mono font-black text-primary">{quality}%</span>
                       </div>
+                      <input
+                        type="range"
+                        min="5"
+                        max="100"
+                        step="5"
+                        value={quality}
+                        onChange={(e) => setQuality(parseInt(e.target.value, 10))}
+                        className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
+                      />
                     </div>
 
                     {/* Auto Orient */}
@@ -375,18 +372,17 @@ export default function JpgToPngPage() {
                         Strip profiles and comments (Strip Metadata)
                       </label>
                     </div>
-
                   </div>
 
                   {convertedBlob && (
                     <div className="bg-lightbg/60 border border-bordercolor rounded-xl p-4 flex flex-col gap-2">
                       <span className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 font-semibold font-bold">File Sizes</span>
                       <div className="flex justify-between items-center text-xs font-semibold text-textmain">
-                        <span>Original (JPG):</span>
+                        <span>Original (TIFF):</span>
                         <span className="font-mono text-gray-500">{formatSize(file.size)}</span>
                       </div>
                       <div className="flex justify-between items-center text-xs font-semibold text-textmain">
-                        <span>Converted (PNG):</span>
+                        <span>Converted (JPG):</span>
                         <span className="font-mono text-primary font-bold">{formatSize(convertedBlob.size)}</span>
                       </div>
                     </div>
@@ -397,14 +393,14 @@ export default function JpgToPngPage() {
                   <div className="pt-3 border-t border-bordercolor/60">
                     <button
                       type="button"
-                      onClick={downloadPngImage}
+                      onClick={downloadJpgImage}
                       disabled={isConverting || !convertedBlob}
                       style={{ width: "100%", padding: "13px", fontSize: 13, fontWeight: 800, borderRadius: 12, border: "none", cursor: "pointer", background: "linear-gradient(135deg, #5B5BD6 0%, #7C3AED 100%)", color: "#fff", boxShadow: "0 4px 14px rgba(91,91,214,0.30)", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "all 0.18s" }}
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                       </svg>
-                      Download PNG Image
+                      Download JPG Image
                     </button>
                   </div>
             </div>

@@ -93,14 +93,77 @@ export default function ImageConverterPage() {
     setIsConverting(true);
     setErrorMsg('');
 
-    const img = new Image();
-    img.onload = () => {
+    const runConversion = async () => {
       try {
+        let sourceCanvas = null;
+        let originalW = 0;
+        let originalH = 0;
+
+        const isTiff = file.name.toLowerCase().endsWith('.tiff') || file.name.toLowerCase().endsWith('.tif');
+
+        if (isTiff) {
+          // Read TIFF file
+          const arrayBuffer = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.onerror = () => reject(new Error('Failed to read TIFF file.'));
+            reader.readAsArrayBuffer(file);
+          });
+
+          // Load UTIF
+          const utifModule = await import('utif');
+          const UTIF = utifModule.default || utifModule;
+
+          // Decode
+          const ifds = UTIF.decode(arrayBuffer);
+          if (!ifds || ifds.length === 0) {
+            throw new Error('Invalid TIFF structure.');
+          }
+          UTIF.decodeImage(arrayBuffer, ifds[0]);
+          const rgba = UTIF.toRGBA8(ifds[0]);
+
+          originalW = ifds[0].width;
+          originalH = ifds[0].height;
+
+          sourceCanvas = document.createElement('canvas');
+          sourceCanvas.width = originalW;
+          sourceCanvas.height = originalH;
+          const sCtx = sourceCanvas.getContext('2d');
+          if (!sCtx) throw new Error('Canvas context not available.');
+          const imgData = sCtx.createImageData(originalW, originalH);
+          imgData.data.set(rgba);
+          sCtx.putImageData(imgData, 0, 0);
+        } else {
+          // Load image standardly
+          await new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+              originalW = img.naturalWidth || img.width;
+              originalH = img.naturalHeight || img.height;
+
+              sourceCanvas = document.createElement('canvas');
+              sourceCanvas.width = originalW;
+              sourceCanvas.height = originalH;
+              const sCtx = sourceCanvas.getContext('2d');
+              if (sCtx) {
+                sCtx.drawImage(img, 0, 0);
+                resolve();
+              } else {
+                reject(new Error('Canvas context not available.'));
+              }
+            };
+            img.onerror = () => reject(new Error('Failed to load image source.'));
+            img.src = file.preview || URL.createObjectURL(file);
+          });
+        }
+
+        if (!active) return;
+
+        // Now run the canvas-based transformations (resizing, keying, filters)
         const canvas = document.createElement('canvas');
-        
-        let w = img.naturalWidth || img.width;
-        let h = img.naturalHeight || img.height;
-        
+        let w = originalW;
+        let h = originalH;
+
         // Handle resizing
         if (targetFormat === 'image/x-icon') {
           if (icoFavicon) {
@@ -140,8 +203,8 @@ export default function ImageConverterPage() {
           ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
 
-        // Draw image onto canvas
-        ctx.drawImage(img, 0, 0, w, h);
+        // Draw sourceCanvas onto target canvas
+        ctx.drawImage(sourceCanvas, 0, 0, w, h);
 
         // Apply B&W filter if SVG color mode is B&W
         if (targetFormat === 'image/svg+xml' && svgColorMode === 'bw') {
@@ -208,14 +271,7 @@ export default function ImageConverterPage() {
       }
     };
 
-    img.onerror = () => {
-      if (active) {
-        setErrorMsg('Failed to process image source.');
-        setIsConverting(false);
-      }
-    };
-
-    img.src = file.preview || URL.createObjectURL(file);
+    runConversion();
 
     return () => {
       active = false;
@@ -324,7 +380,7 @@ export default function ImageConverterPage() {
           <div style={{ maxWidth: 680, margin: '0 auto', width: '100%' }}>
             <UploadBox 
               onFileSelect={handleFileSelect} 
-              acceptedFormats={['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif', '.svg']}
+              acceptedFormats={['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif', '.svg', '.avif', '.tiff', '.tif']}
               multiple={false} 
             />
           </div>
