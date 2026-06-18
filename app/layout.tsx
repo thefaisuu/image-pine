@@ -19,6 +19,9 @@ export const metadata: Metadata = {
   description:
     "Free online image editor. Resize, compress, rotate, flip and convert images instantly in your browser. No upload needed - 100% private.",
   keywords: "image resizer, image compressor, rotate image, flip image, free image editor online",
+  openGraph: {
+    siteName: "ImagePine",
+  },
 };
 
 export default function RootLayout({

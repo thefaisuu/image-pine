@@ -476,6 +476,18 @@ export default function Home() {
 
   return (
     <div style={{background:'#F7F7FB',minHeight:'100%'}}>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            "name": "ImagePine",
+            "alternateName": ["Image Pine"],
+            "url": "https://www.imagepine.com/"
+          })
+        }}
+      />
 
       {/* ═══ HERO (no files uploaded yet) ═══ */}
       {!hasFiles && (
