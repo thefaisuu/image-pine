@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "Extract Text from Images (OCR) Online for Free | ImagePine",
+  title: "Extract Text from Images (OCR) Online for Free - ImagePine",
   description: "Scan images, screenshots, and documents to extract readable text locally using Tesseract OCR. Private, fast, and multi-language.",
 };
 

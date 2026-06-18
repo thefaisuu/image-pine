@@ -280,7 +280,7 @@ export default function ContactPage() {
               <p style={{ fontSize: 13, color: '#6B6B8A', lineHeight: 1.6, margin: 0 }}>
                 Prefer sending an email directly? Reach us at:
               </p>
-              <a href="mailto:helloimagepine@gmail.com" style={{
+              <a href="mailto:hello@imagepine.com" style={{
                 fontSize: 15, fontWeight: 700, color: '#5B5BD6', textDecoration: 'none',
                 display: 'inline-flex', alignItems: 'center', gap: 6
               }}>
@@ -288,7 +288,7 @@ export default function ContactPage() {
                   <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
                   <polyline points="22,6 12,13 2,6"/>
                 </svg>
-                helloimagepine@gmail.com
+                hello@imagepine.com
               </a>
             </div>
 

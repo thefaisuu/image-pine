@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "Generate QR Codes & ISBN Barcodes Online for Free | ImagePine",
+  title: "Generate QR Codes & ISBN Barcodes Online for Free - ImagePine",
   description: "Generate customized QR codes and standard ISBN book barcodes. Highly scannable, safe, and operates entirely in the browser.",
 };
 

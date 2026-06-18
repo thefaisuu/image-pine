@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "Create Photo Collages Online for Free | ImagePine",
+  title: "Create Photo Collages Online for Free - ImagePine",
   description: "Create beautiful photo collages online. Combine multiple photos with custom layouts, borders, and backgrounds.",
 };
 
