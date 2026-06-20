@@ -81,7 +81,14 @@ const drawEan13BarcodeOnCanvas = (canvas, digits, darkColor, lightColor, targetW
   canvas.height = canvasH;
   
   // Fill background
-  if (lightColor && lightColor !== 'transparent' && lightColor !== '#00000000') {
+  const isBackgroundTransparent = !lightColor || 
+    lightColor === 'transparent' || 
+    lightColor === '#00000000' || 
+    lightColor === '#0000' || 
+    lightColor === 'rgba(0,0,0,0)' || 
+    lightColor === 'rgba(0, 0, 0, 0)';
+
+  if (!isBackgroundTransparent) {
     ctx.fillStyle = lightColor;
     ctx.fillRect(0, 0, canvasW, canvasH);
   } else {
