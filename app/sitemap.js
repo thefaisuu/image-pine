@@ -19,7 +19,7 @@ export default async function sitemap() {
     if (path === '') {
       priority = 1.0;
       changeFrequency = 'daily';
-    } else if (['/about', '/contact', '/privacy', '/terms'].includes(path)) {
+    } else if (['/contact', '/privacy', '/terms'].includes(path)) {
       priority = 0.5;
       changeFrequency = 'monthly';
     }
