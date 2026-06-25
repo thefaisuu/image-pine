@@ -615,7 +615,19 @@ export default function GenerateMetadataPage() {
     const k1 = getCookie('openrouter_key_1') || '';
     const k2 = getCookie('openrouter_key_2') || '';
     const k3 = getCookie('openrouter_key_3') || '';
-    const savedModel = getCookie('openrouter_model') || 'google/gemma-4-31b-it:free';
+    let savedModel = getCookie('openrouter_model') || 'google/gemma-4-31b-it:free';
+    const validModels = [
+      'google/gemma-4-31b-it:free',
+      'openrouter/free',
+      'nvidia/nemotron-nano-12b-v2-vl:free',
+      'google/gemma-4-26b-a4b-it:free',
+      'meta-llama/llama-3.2-11b-vision-instruct',
+      'meta-llama/llama-3.2-90b-vision-instruct'
+    ];
+    if (!validModels.includes(savedModel)) {
+      savedModel = 'google/gemma-4-31b-it:free';
+      setCookie('openrouter_model', savedModel, 365);
+    }
     
     const loaded = [];
     if (k1) loaded.push(k1);
