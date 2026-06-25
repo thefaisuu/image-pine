@@ -256,8 +256,7 @@ Constraints:
     prompt += `7. Exclusion: You MUST NOT include any of the following words/tags (or variants) in the title, description or keywords array: ${excludeKeywords}.\n`;
   }
 
-  prompt += `\nResponse format MUST be a valid JSON object matching this schema exactly, with no additional markdown formatting outside the JSON block:
-{
+  prompt += `\nResponse format MUST be a raw, valid JSON object matching this schema exactly. Do NOT wrap the JSON output in markdown code blocks, backticks, or any conversational text. The response must start with { and end with }:\n{
   "title": "your title string here",
   "description": "your description string here",
   "keywords": ["keyword1", "keyword2", ...],
@@ -425,7 +424,8 @@ const callGrokApiWithFallback = async (imageB64, mimeType, prompt, apiKeys, mode
             }
           ],
           temperature: 0.2,
-          response_format: { type: "json_object" }
+          response_format: { type: "json_object" },
+          reasoning_format: "hidden"
         })
       });
 
