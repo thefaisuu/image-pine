@@ -438,11 +438,13 @@ const callGrokApiWithFallback = async (imageB64, mimeType, prompt, apiKeys, mode
             }
           ],
           temperature: 0.2,
-          response_format: { type: "json_object" }
+          response_format: { type: "json_object" },
+          max_completion_tokens: 1024
         };
 
         if (isReasoningModel) {
           payload.reasoning_format = "hidden";
+          payload.reasoning_effort = "none";
         }
 
         let response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -700,7 +702,7 @@ export default function GenerateMetadataPage() {
         body: JSON.stringify({
           model: selectedModel || 'qwen/qwen3.6-27b',
           messages: [{ role: 'user', content: 'Ping' }],
-          max_tokens: 2
+          max_completion_tokens: 2
         })
       });
 
