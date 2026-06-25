@@ -73,7 +73,7 @@ const _FEATURES = [
       </svg>
     ),
     title: 'Groq-Powered Vision',
-    desc: 'Uses Groq\'s high-speed Llama 4 Scout multimodal vision model to extract highly descriptive and relevant metadata tags from your assets instantly.'
+    desc: 'Uses Groq\'s high-speed multimodal vision models to extract highly descriptive and relevant metadata tags from your assets instantly.'
   },
   {
     icon: (
@@ -166,7 +166,7 @@ const _FAQS = [
   },
   {
     q: "What AI model is used for image analysis?",
-    a: "The generator uses Llama 4 Scout 17B by default via Groq, with automatic fallback to other Groq vision models if needed."
+    a: "The generator uses Groq vision models by default, with automatic key rotation and fallback if needed."
   },
   {
     q: "How do I import the output CSV file into stock photo websites?",
@@ -1229,12 +1229,12 @@ export default function GenerateMetadataPage() {
   return (
     <ToolPageShell
       title="Generate Metadata"
-      subtitle="Instantly generate SEO tags, titles, and descriptions for your files using Groq Llama 4 Scout vision AI. Ideal for stock photography cataloging."
+      subtitle="Instantly generate SEO tags, titles, and descriptions for your files using Groq vision AI. Ideal for stock photography cataloging."
       features={_FEATURES}
       steps={_STEPS}
       faqs={_FAQS}
       seoTitle="AI Image Metadata Generator — Batch Generate Titles, Tags & Descriptions"
-      seoText="Free online client-side AI Metadata Generator. Batch generate search engine metadata tags, file descriptions, and titles for your portfolio using Groq Llama 4 Scout vision models. Custom lengths, keyword rules, and local CSV downloads with total privacy."
+      seoText="Free online client-side AI Metadata Generator. Batch generate search engine metadata tags, file descriptions, and titles for your portfolio using Groq vision models. Custom lengths, keyword rules, and local CSV downloads with total privacy."
     >
       <div className="flex flex-col gap-6">
 
@@ -1924,10 +1924,10 @@ export default function GenerateMetadataPage() {
                         outline: 'none'
                       }}
                     >
-                      <option value="meta-llama/llama-4-scout-17b-16e-instruct">Llama 4 Scout 17B (Default)</option>
-                      <option value="meta-llama/llama-4-maverick-17b-128e-instruct">Llama 4 Maverick 17B</option>
-                      <option value="qwen/qwen3.6-27b">Qwen 3.6 27B</option>
-                      <option value="llama-3.2-11b-vision-preview">Llama 3.2 11B Vision (Legacy)</option>
+                      <option value="meta-llama/llama-4-scout-17b-16e-instruct">Groq Default Model</option>
+                      <option value="meta-llama/llama-4-maverick-17b-128e-instruct">Groq Maverick Model</option>
+                      <option value="qwen/qwen3.6-27b">Groq Qwen Model</option>
+                      <option value="llama-3.2-11b-vision-preview">Groq Llama 3.2 (Legacy)</option>
                     </select>
                   </div>
 
