@@ -221,9 +221,9 @@ const buildPrompt = (settings) => {
 Return a JSON object containing exactly four keys: "title", "description", "keywords", and "category".
 
 Constraints:
-1. "title": A descriptive, search-friendly title. The title MUST be EXACTLY ${titleLength} characters in total length (including spaces). Count the characters carefully and adjust the wording so the total character count of the title string is exactly ${titleLength}.
-2. "description": A detailed, SEO-friendly description of the image content. The description MUST be EXACTLY ${descriptionLength} characters in total length (including spaces). Count the characters carefully and adjust the wording so the total character count of the description string is exactly ${descriptionLength}.
-3. "keywords": An array of descriptive keywords/tags. It MUST contain exactly ${keywordLength} keywords. You must output exactly ${keywordLength} items in the "keywords" array, no more and no less. Count them carefully to ensure there are exactly ${keywordLength} strings.
+1. "title": A descriptive, search-friendly title. The title should be around ${titleLength} characters in total length (under ${titleLength} characters).
+2. "description": A detailed, SEO-friendly description of the image content. The description should be around ${descriptionLength} characters in total length (under ${descriptionLength} characters).
+3. "keywords": An array of descriptive keywords/tags. It should contain around ${keywordLength} keywords (maximum ${keywordLength} items).
 4. Keyword format: Each keyword in the array must be in the format: ${formatDesc}.
 5. "category": An integer between 1 and 21 representing the best-matching category from the list below:
    1 - Animals
@@ -407,6 +407,10 @@ const callGrokApiWithFallback = async (imageB64, mimeType, prompt, apiKeys, mode
         body: JSON.stringify({
           model: model || 'qwen/qwen3.6-27b',
           messages: [
+            {
+              role: 'system',
+              content: 'You are an AI assistant specialized in image analysis. You must output responses strictly in valid, raw JSON format matching the requested schema. Do not output any thinking tags, explanation, or markdown fences.'
+            },
             {
               role: 'user',
               content: [
