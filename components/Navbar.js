@@ -153,7 +153,7 @@ export default function Navbar() {
             {t('Contact Us')}
           </a>
           <a
-            href="https://buymeacoffee.com/imagepine"
+            href="https://buymeacoffee.com/nexlifyy"
             target="_blank"
             rel="noopener noreferrer"
             style={{
@@ -293,7 +293,7 @@ export default function Navbar() {
               {t('Contact Us')}
             </a>
             <a
-              href="https://buymeacoffee.com/imagepine"
+              href="https://buymeacoffee.com/nexlifyy"
               target="_blank"
               rel="noopener noreferrer"
               style={{
