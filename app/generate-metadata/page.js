@@ -395,17 +395,27 @@ const callGrokApiWithFallback = async (imageB64, mimeType, prompt, apiKeys, mode
   let index = currentKeyIdx % activeKeys.length;
   let attempts = 0;
 
+  // Compile a list of candidate models, starting with the requested one
+  const candidateModels = [
+    model,
+    'llama-3.2-11b-vision-preview',
+    'llama-3.2-90b-vision-preview',
+    'qwen/qwen3.6-27b'
+  ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
+
   while (attempts < activeKeys.length) {
     const key = activeKeys[index];
-    try {
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${key}`
-        },
-        body: JSON.stringify({
-          model: model || 'qwen/qwen3.6-27b',
+    let success = false;
+    let resultData = null;
+    let modelUsed = model || 'qwen/qwen3.6-27b';
+
+    // Try the candidate models in order for this key
+    for (let mIdx = 0; mIdx < candidateModels.length; mIdx++) {
+      const currentModel = candidateModels[mIdx];
+      try {
+        const isReasoningModel = currentModel.includes('qwen') || currentModel.includes('deepseek');
+        const payload = {
+          model: currentModel,
           messages: [
             {
               role: 'system',
@@ -428,39 +438,63 @@ const callGrokApiWithFallback = async (imageB64, mimeType, prompt, apiKeys, mode
             }
           ],
           temperature: 0.2,
-          response_format: { type: "json_object" },
-          reasoning_format: "hidden"
-        })
-      });
+          response_format: { type: "json_object" }
+        };
 
-      if (response.status === 429) {
-        attempts++;
-        const nextIndex = (index + 1) % activeKeys.length;
-        if (attempts < activeKeys.length) {
-          onKeySwitch?.(`API Key ${index + 1} rate limited (429). Switching to API Key ${nextIndex + 1}...`);
-          index = nextIndex;
-          continue;
+        if (isReasoningModel) {
+          payload.reasoning_format = "hidden";
+        }
+
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${key}`
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (response.status === 429) {
+          onKeySwitch?.(`API Key ${index + 1} rate limited (429) on ${currentModel}.`);
+          break; // Break the models loop to rotate to the next key
+        }
+
+        if (!response.ok) {
+          const errText = await response.text();
+          // If it's a JSON validation error, let's try the next model
+          if (response.status === 400 && (errText.includes("json_validate_failed") || errText.includes("Failed to validate JSON"))) {
+            onKeySwitch?.(`Model ${currentModel} failed JSON validation. Trying fallback model...`);
+            continue;
+          }
+          throw new Error(`API Error (Status ${response.status}): ${errText}`);
+        }
+
+        const data = await response.json();
+        resultData = data;
+        modelUsed = currentModel;
+        success = true;
+        break; // Successfully got response, stop trying other models
+      } catch (err) {
+        if (mIdx === candidateModels.length - 1) {
+          // If we exhausted all models for this key, throw the error to go to the next key
+          throw err;
         } else {
-          throw new Error("All configured API keys returned rate limits (429).");
+          onKeySwitch?.(`Error with model ${currentModel}: ${err.message}. Trying next fallback model...`);
         }
       }
+    }
 
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`API Error (Status ${response.status}): ${errText}`);
-      }
+    if (success) {
+      return { data: resultData, keyUsedIndex: index, modelUsed };
+    }
 
-      const data = await response.json();
-      return { data, keyUsedIndex: index };
-    } catch (err) {
-      attempts++;
-      const nextIndex = (index + 1) % activeKeys.length;
-      if (attempts < activeKeys.length) {
-        onKeySwitch?.(`API Key ${index + 1} failed: ${err.message}. Trying API Key ${nextIndex + 1}...`);
-        index = nextIndex;
-      } else {
-        throw err;
-      }
+    attempts++;
+    const nextIndex = (index + 1) % activeKeys.length;
+    if (attempts < activeKeys.length) {
+      onKeySwitch?.(`Switching to API Key ${nextIndex + 1}...`);
+      index = nextIndex;
+    } else {
+      throw new Error("All configured API keys and fallback models failed.");
     }
   }
   throw new Error("Failed to process API requests.");
@@ -545,13 +579,14 @@ export default function GenerateMetadataPage() {
 
   const isGeneratingRef = useRef(false);
   const currentKeyIndexRef = useRef(0);
-  const modelName = 'qwen/qwen3.6-27b'; // Hardcoded vision model for Groq
+  const [selectedModel, setSelectedModel] = useState('qwen/qwen3.6-27b');
 
   // Load API keys from browser cookies on mount
   useEffect(() => {
     const k1 = getCookie('grok_key_1') || '';
     const k2 = getCookie('grok_key_2') || '';
     const k3 = getCookie('grok_key_3') || '';
+    const savedModel = getCookie('grok_model') || 'qwen/qwen3.6-27b';
     
     const loaded = [];
     if (k1) loaded.push(k1);
@@ -566,6 +601,8 @@ export default function GenerateMetadataPage() {
       setApiKeys(['']);
       setIsSaved(false);
     }
+
+    setSelectedModel(savedModel);
   }, []);
 
   const addLog = (text, type = 'info') => {
@@ -643,7 +680,7 @@ export default function GenerateMetadataPage() {
           'Authorization': `Bearer ${firstKey}`
         },
         body: JSON.stringify({
-          model: 'qwen/qwen3.6-27b',
+          model: selectedModel || 'qwen/qwen3.6-27b',
           messages: [{ role: 'user', content: 'Ping' }],
           max_tokens: 2
         })
@@ -809,12 +846,12 @@ export default function GenerateMetadataPage() {
         }
 
         // Send API Request to Groq
-        const { data, keyUsedIndex } = await callGrokApiWithFallback(
+        const { data, keyUsedIndex, modelUsed } = await callGrokApiWithFallback(
           b64,
           mimeType,
           prompt,
           apiKeys,
-          modelName,
+          selectedModel,
           currentKeyIndexRef.current,
           (msg) => addLog(msg, "warning")
         );
@@ -845,7 +882,7 @@ export default function GenerateMetadataPage() {
           }
         }));
 
-        addLog(`Successfully processed ${file.name} (Key ${keyUsedIndex + 1})`, "success");
+        addLog(`Successfully processed ${file.name} using ${modelUsed} (Key ${keyUsedIndex + 1})`, "success");
       } catch (err) {
         console.error(err);
         setMetadataMap(prev => ({
@@ -1046,7 +1083,7 @@ export default function GenerateMetadataPage() {
         ].join(delimiter);
       } else if (platform === 'Magnific') {
         const promptVal = isAiGenerated ? 'Analyze this image and generate SEO-optimized metadata. Return JSON with title, description, keywords, category.' : '';
-        const modelVal = isAiGenerated ? 'qwen/qwen3.6-27b' : '';
+        const modelVal = isAiGenerated ? selectedModel : '';
         return [
           escapeCsv(f.name),
           escapeCsv(title),
@@ -1761,6 +1798,37 @@ export default function GenerateMetadataPage() {
                         Mark batch as Editorial (iStock, DepositPhotos, Pond5)
                       </label>
                     </div>
+                  </div>
+
+                  <div style={{ height: 1, background: '#F1F1F7', margin: '4px 0' }} />
+
+                  {/* Model Selection Dropdown */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: '#6B6B8A' }}>Preferred AI Model</label>
+                    <select
+                      value={selectedModel}
+                      onChange={(e) => {
+                        setSelectedModel(e.target.value);
+                        setCookie('grok_model', e.target.value, 365);
+                        addLog(`Preferred model changed to: ${e.target.value}`, "info");
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        background: '#F7F7FB',
+                        border: '1px solid #E4E4EF',
+                        borderRadius: 9,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: '#3B3B5E',
+                        cursor: 'pointer',
+                        outline: 'none'
+                      }}
+                    >
+                      <option value="qwen/qwen3.6-27b">Qwen 3.6 27B Vision (Default)</option>
+                      <option value="llama-3.2-11b-vision-preview">Llama 3.2 11B Vision (Fast)</option>
+                      <option value="llama-3.2-90b-vision-preview">Llama 3.2 90B Vision (Detailed)</option>
+                    </select>
                   </div>
 
                   <div style={{ height: 1, background: '#F1F1F7', margin: '4px 0' }} />
