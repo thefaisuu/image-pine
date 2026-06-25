@@ -72,8 +72,8 @@ const _FEATURES = [
         <line x1="12" y1="22.08" x2="12" y2="12" />
       </svg>
     ),
-    title: 'Groq-Powered Vision',
-    desc: 'Uses Groq\'s high-speed multimodal vision models to extract highly descriptive and relevant metadata tags from assets instantly.'
+    title: 'Gemini-Powered Vision',
+    desc: 'Uses Google Gemini\'s multimodal vision models to extract highly descriptive and relevant metadata tags from assets instantly.'
   },
   {
     icon: (
@@ -142,23 +142,23 @@ const _FEATURES = [
 ];
 
 const _STEPS = [
-  { n: '1', title: 'Save API Keys & Upload', desc: 'Add your Groq API key, save it to cookies, and upload up to 500 files.' },
+  { n: '1', title: 'Save API Keys & Upload', desc: 'Add your Google Gemini API key, save it to cookies, and upload up to 500 files.' },
   { n: '2', title: 'Set Rules & Generate', desc: 'Choose your desired title length, keyword formats, and trigger the batch generator.' },
   { n: '3', title: 'Edit & Download CSV', desc: 'Verify and refine results directly in the app, then download the structured CSV file.' }
 ];
 
 const _FAQS = [
   {
-    q: "Where do I find my Groq API key?",
-    a: "You can create and manage API keys by signing up on the Groq Console (console.groq.com/keys). You can utilize their high-speed vision models."
+    q: "Where do I find my Gemini API key?",
+    a: "You can create and manage API keys for free by visiting Google AI Studio (aistudio.google.com/apikey). No credit card required — just sign in with your Google account."
   },
   {
     q: "How does the fallback key rotation work?",
-    a: "Groq API keys have rate limits. By providing up to 3 keys, if the generator hits an HTTP 429 (Too Many Requests) error, it will immediately rotate to the next key and retry, keeping your large batch runs running smoothly."
+    a: "Gemini API keys have rate limits (15 requests/min on the free tier). By providing up to 3 keys, if key 1 hits an HTTP 429 error, the tool automatically rotates to key 2, then key 3, keeping your batch runs uninterrupted."
   },
   {
-    q: "Are my files stored on Groq?",
-    a: "No, Groq does not store your files permanently; they are processed temporarily for metadata inference. Image Pine downscales image frames locally before uploading to conserve your bandwidth and API limits."
+    q: "Are my files stored on Google?",
+    a: "No, Google Gemini does not store your files permanently; they are processed temporarily for metadata inference. Image Pine downscales image frames locally before uploading to conserve your bandwidth and API limits."
   },
   {
     q: "Can I edit the generated titles and keywords before exporting?",
@@ -166,7 +166,7 @@ const _FAQS = [
   },
   {
     q: "What AI model is used for image analysis?",
-    a: "The generator utilizes Groq's high-speed Llama-3-Vision models, which excel at visual recognition, optical character reading, and generating accurate stock photo descriptions."
+    a: "The generator uses Google's Gemini 2.0 Flash model by default, which excels at visual recognition, optical character reading, and generating accurate stock photo descriptions — with a generous free tier of 1,500 requests per day."
   },
   {
     q: "How do I import the output CSV file into stock photo websites?",
@@ -206,7 +206,7 @@ const enforceDescLength = (desc, targetLength, keywords) => {
   return refinedDesc;
 };
 
-// Helper to construct Groq API Prompt
+// Helper to construct Gemini API Prompt
 const buildPrompt = (settings) => {
   const { titleLength, descriptionLength, keywordFormat, keywordLength, includeKeywords, excludeKeywords } = settings;
 
@@ -385,142 +385,141 @@ const getResizedImageB64 = (fileObj) => {
   });
 };
 
-// API Call with 3-Key Fallback and Rotational Logic (Groq API Endpoint)
-const callGrokApiWithFallback = async (imageB64, mimeType, prompt, apiKeys, model, currentKeyIdx, onKeySwitch) => {
+// API Call with 3-Key Fallback, Rotational Logic, and Cooldown Retry (Google Gemini API)
+// shouldContinue: optional fn() => bool — if it returns false, cooldown is aborted
+const callGeminiApiWithFallback = async (imageB64, mimeType, prompt, apiKeys, model, currentKeyIdx, onKeySwitch, shouldContinue) => {
   const activeKeys = apiKeys.filter(k => k.trim() !== '');
   if (activeKeys.length === 0) {
     throw new Error("No API keys configured. Please configure at least one API key.");
   }
 
-  let index = currentKeyIdx % activeKeys.length;
-  let attempts = 0;
-
-  // Candidate models in priority order — most reliable vision model first
+  // Candidate Gemini models in priority order
   const candidateModels = [
     model,
-    'meta-llama/llama-4-maverick-17b-128e-instruct',
-    'llama-3.2-11b-vision-preview',
-    'llama-3.2-90b-vision-preview',
-    'qwen/qwen3.6-27b'
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro'
   ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
 
-  while (attempts < activeKeys.length) {
-    const key = activeKeys[index];
-    let success = false;
-    let resultData = null;
-    let modelUsed = model || 'meta-llama/llama-4-maverick-17b-128e-instruct';
+  const buildPayload = (currentModel) => ({
+    model: currentModel,
+    messages: [
+      {
+        role: 'system',
+        content: 'You are an AI assistant that analyzes images. Respond ONLY with a raw JSON object — no markdown, no code fences, no explanations. Start your response with { and end with }.'
+      },
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: prompt },
+          { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageB64}` } }
+        ]
+      }
+    ],
+    temperature: 0.2,
+    max_completion_tokens: 1500
+  });
 
-    // Try the candidate models in order for this key
-    for (let mIdx = 0; mIdx < candidateModels.length; mIdx++) {
-      const currentModel = candidateModels[mIdx];
-      try {
-        const payload = {
-          model: currentModel,
-          messages: [
-            {
-              role: 'system',
-              content: 'You are an AI assistant that analyzes images. Respond ONLY with a raw JSON object — no markdown, no code fences, no explanations. Start your response with { and end with }.'
-            },
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: prompt
-                },
-                {
-                  type: 'image_url',
-                  image_url: {
-                    url: `data:${mimeType};base64,${imageB64}`
-                  }
-                }
-              ]
+  const tryFetch = async (key, payload) => fetch(`https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+    body: JSON.stringify(payload)
+  });
+
+  // Attempt all keys. Returns { data, keyUsedIndex, modelUsed } or null if all 429.
+  const tryAllKeys = async (startIdx) => {
+    let index = startIdx % activeKeys.length;
+    for (let attempts = 0; attempts < activeKeys.length; attempts++) {
+      const key = activeKeys[index];
+      let success = false;
+      let resultData = null;
+      let modelUsed = candidateModels[0];
+
+      // Try each candidate model for this key
+      for (let mIdx = 0; mIdx < candidateModels.length; mIdx++) {
+        const currentModel = candidateModels[mIdx];
+        try {
+          const payload = buildPayload(currentModel);
+          let response = await tryFetch(key, payload);
+
+          // Per-key 429 retry with backoff: 5s, 10s, 20s
+          if (response.status === 429) {
+            const delays = [5000, 10000, 20000];
+            for (let retryCount = 0; retryCount < delays.length && response.status === 429; retryCount++) {
+              onKeySwitch?.(`Rate limited (429) on Key ${index + 1} / ${currentModel}. Retrying in ${delays[retryCount] / 1000}s (attempt ${retryCount + 1}/3)...`);
+              await new Promise(r => setTimeout(r, delays[retryCount]));
+              response = await tryFetch(key, payload);
             }
-          ],
-          temperature: 0.2,
-          max_completion_tokens: 1500
-        };
-
-        let response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${key}`
-          },
-          body: JSON.stringify(payload)
-        });
-
-        if (response.status === 429) {
-          let retryCount = 0;
-          while (retryCount < 3 && response.status === 429) {
-            retryCount++;
-            const delay = retryCount * 3000;
-            onKeySwitch?.(`Rate limit (429) on ${currentModel}. Retrying in ${delay / 1000}s (Attempt ${retryCount}/3)...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-            response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${key}`
-              },
-              body: JSON.stringify(payload)
-            });
           }
-        }
 
-        if (response.status === 429) {
-          onKeySwitch?.(`API Key ${index + 1} remains rate limited (429) on ${currentModel} after retries.`);
-          break; // Break the models loop to rotate to the next key
-        }
+          // Still 429 after retries — this key is exhausted, break to next key
+          if (response.status === 429) {
+            onKeySwitch?.(`Key ${index + 1} still rate limited after retries. Trying next key...`);
+            break;
+          }
 
-        if (!response.ok) {
-          const errText = await response.text();
-          // Any non-429 error from this model — try next fallback model
-          onKeySwitch?.(`Model ${currentModel} failed (Status ${response.status}). Trying fallback model...`);
+          if (!response.ok) {
+            const errText = await response.text();
+            onKeySwitch?.(`Model ${currentModel} failed (Status ${response.status}). Trying next model...`);
+            if (mIdx < candidateModels.length - 1) continue;
+            throw new Error(`API Error (Status ${response.status}): ${errText}`);
+          }
+
+          const data = await response.json();
+          const content = data.choices?.[0]?.message?.content;
+          if (!content || content.trim() === '') {
+            onKeySwitch?.(`Model ${currentModel} returned empty output. Trying next model...`);
+            if (mIdx < candidateModels.length - 1) continue;
+            throw new Error(`Model ${currentModel} returned an empty response.`);
+          }
+
+          resultData = data;
+          modelUsed = currentModel;
+          success = true;
+          break;
+        } catch (err) {
           if (mIdx < candidateModels.length - 1) {
-            continue;
+            onKeySwitch?.(`Error with ${currentModel}: ${err.message}. Trying next model...`);
           }
-          throw new Error(`API Error (Status ${response.status}): ${errText}`);
-        }
-
-        const data = await response.json();
-        const content = data.choices?.[0]?.message?.content;
-        if (!content || content.trim() === '') {
-          // Model returned empty content — try next fallback
-          onKeySwitch?.(`Model ${currentModel} returned empty output. Trying fallback model...`);
-          if (mIdx < candidateModels.length - 1) {
-            continue;
-          }
-          throw new Error(`Model ${currentModel} returned an empty response.`);
-        }
-        resultData = data;
-        modelUsed = currentModel;
-        success = true;
-        break; // Successfully got response, stop trying other models
-      } catch (err) {
-        if (mIdx === candidateModels.length - 1) {
-          // If we exhausted all models for this key, throw the error to go to the next key
-          throw err;
-        } else {
-          onKeySwitch?.(`Error with model ${currentModel}: ${err.message}. Trying next fallback model...`);
+          // Last model for this key — bubble up to rotate key
+          if (mIdx === candidateModels.length - 1) break;
         }
       }
-    }
 
-    if (success) {
-      return { data: resultData, keyUsedIndex: index, modelUsed };
-    }
+      if (success) return { data: resultData, keyUsedIndex: index, modelUsed };
 
-    attempts++;
-    const nextIndex = (index + 1) % activeKeys.length;
-    if (attempts < activeKeys.length) {
-      onKeySwitch?.(`Switching to API Key ${nextIndex + 1}...`);
-      index = nextIndex;
-    } else {
-      throw new Error("All configured API keys and fallback models failed.");
+      // Rotate to next key
+      index = (index + 1) % activeKeys.length;
+    }
+    return null; // All keys 429 or failed
+  };
+
+  // First pass: try all keys
+  const firstPass = await tryAllKeys(currentKeyIdx % activeKeys.length);
+  if (firstPass) return firstPass;
+
+  // All keys are rate-limited — wait 60s then retry once
+  const COOLDOWN = 60;
+  onKeySwitch?.(`⏳ All ${activeKeys.length} API key(s) are rate limited (429). Waiting ${COOLDOWN}s for Gemini limits to reset...`);
+  for (let s = COOLDOWN; s > 0; s--) {
+    if (shouldContinue && !shouldContinue()) {
+      throw new Error('Generation stopped by user during cooldown.');
+    }
+    await new Promise(r => setTimeout(r, 1000));
+    if (s % 15 === 0 || s <= 5) {
+      onKeySwitch?.(`⏳ Rate limit cooldown: ${s}s remaining...`);
     }
   }
-  throw new Error("Failed to process API requests.");
+
+  if (shouldContinue && !shouldContinue()) {
+    throw new Error('Generation stopped by user during cooldown.');
+  }
+
+  onKeySwitch?.('🔄 Retrying all keys after cooldown...');
+  const secondPass = await tryAllKeys(0);
+  if (secondPass) return secondPass;
+
+  throw new Error(`All configured API keys returned rate limits (429). Please add more API keys or wait a few minutes before resuming.`);
 };
 
 // Cookie Helpers
@@ -602,14 +601,14 @@ export default function GenerateMetadataPage() {
 
   const isGeneratingRef = useRef(false);
   const currentKeyIndexRef = useRef(0);
-  const [selectedModel, setSelectedModel] = useState('meta-llama/llama-4-maverick-17b-128e-instruct');
+  const [selectedModel, setSelectedModel] = useState('gemini-2.0-flash');
 
   // Load API keys from browser cookies on mount
   useEffect(() => {
-    const k1 = getCookie('grok_key_1') || '';
-    const k2 = getCookie('grok_key_2') || '';
-    const k3 = getCookie('grok_key_3') || '';
-    const savedModel = getCookie('grok_model') || 'meta-llama/llama-4-maverick-17b-128e-instruct';
+    const k1 = getCookie('gemini_key_1') || '';
+    const k2 = getCookie('gemini_key_2') || '';
+    const k3 = getCookie('gemini_key_3') || '';
+    const savedModel = getCookie('gemini_model') || 'gemini-2.0-flash';
     
     const loaded = [];
     if (k1) loaded.push(k1);
@@ -672,9 +671,9 @@ export default function GenerateMetadataPage() {
     setApiKeys(finalKeys);
 
     // Save to cookies
-    setCookie('grok_key_1', finalKeys[0] || '', 365);
-    setCookie('grok_key_2', finalKeys[1] || '', 365);
-    setCookie('grok_key_3', finalKeys[2] || '', 365);
+    setCookie('gemini_key_1', finalKeys[0] || '', 365);
+    setCookie('gemini_key_2', finalKeys[1] || '', 365);
+    setCookie('gemini_key_3', finalKeys[2] || '', 365);
     
     setIsSaved(true);
     setTestStatus('');
@@ -696,14 +695,14 @@ export default function GenerateMetadataPage() {
     addLog("Testing key 1 with simple ping...", "info");
 
     try {
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${firstKey}`
         },
         body: JSON.stringify({
-          model: selectedModel || 'qwen/qwen3.6-27b',
+          model: selectedModel || 'gemini-2.0-flash',
           messages: [{ role: 'user', content: 'Ping' }],
           max_completion_tokens: 2
         })
@@ -802,7 +801,7 @@ export default function GenerateMetadataPage() {
     const activeKeys = apiKeys.filter(k => k.trim() !== '');
     if (activeKeys.length === 0) {
       setShowConfig(true);
-      showToast("Please configure and save at least one Groq API Key under 'API Configuration' first.", "warning");
+      showToast("Please configure and save at least one Gemini API Key under 'API Configuration' first.", "warning");
       return;
     }
 
@@ -868,15 +867,22 @@ export default function GenerateMetadataPage() {
           mimeType = res.mimeType;
         }
 
-        // Send API Request to Groq
-        const { data, keyUsedIndex, modelUsed } = await callGrokApiWithFallback(
+        // Send API Request to Google Gemini
+        const { data, keyUsedIndex, modelUsed } = await callGeminiApiWithFallback(
           b64,
           mimeType,
           prompt,
           apiKeys,
           selectedModel,
           currentKeyIndexRef.current,
-          (msg) => addLog(msg, "warning")
+          (msg) => {
+            addLog(msg, "warning");
+            // Surface cooldown to the user as a toast
+            if (msg.startsWith('⏳ All')) {
+              showToast(msg, 'warning');
+            }
+          },
+          () => isGeneratingRef.current
         );
 
         // Update key pointer to the active working key
@@ -906,6 +912,12 @@ export default function GenerateMetadataPage() {
         }));
 
         addLog(`Successfully processed ${file.name} using ${modelUsed} (Key ${keyUsedIndex + 1})`, "success");
+
+        // 4s inter-image delay to stay within Gemini's 15 req/min free tier
+        const isLastFile = pendingFiles.indexOf(file) === pendingFiles.length - 1;
+        if (!isLastFile && isGeneratingRef.current) {
+          await new Promise(r => setTimeout(r, 4000));
+        }
       } catch (err) {
         console.error(err);
         setMetadataMap(prev => ({
@@ -1154,11 +1166,12 @@ export default function GenerateMetadataPage() {
   return (
     <ToolPageShell
       title="Generate Metadata"
-      subtitle="Instantly generate SEO tags, titles, and descriptions for your files using Groq API. Ideal for stock photography cataloging."
+      subtitle="Instantly generate SEO tags, titles, and descriptions for your files using Google Gemini AI. Ideal for stock photography cataloging."
       features={_FEATURES}
       steps={_STEPS}
       faqs={_FAQS}
-      seoText="Free online client-side AI Metadata Generator. Batch generate search engine metadata tags, file descriptions, and titles for your portfolio using Groq. Custom lengths, keyword rules, and local CSV downloads with total privacy."
+      seoTitle="AI Image Metadata Generator — Batch Generate Titles, Tags & Descriptions"
+      seoText="Free online client-side AI Metadata Generator. Batch generate search engine metadata tags, file descriptions, and titles for your portfolio using Google Gemini. Custom lengths, keyword rules, and local CSV downloads with total privacy."
     >
       <div className="flex flex-col gap-6">
 
@@ -1177,7 +1190,7 @@ export default function GenerateMetadataPage() {
               <div>
                 <h3 style={{ fontSize: 14, fontWeight: 700, color: '#111128', margin: 0 }}>API Configuration</h3>
                 <p style={{ fontSize: 11, color: '#9898B5', margin: '2px 0 0' }}>
-                  {numConfiguredKeys > 0 ? `${numConfiguredKeys} key${numConfiguredKeys > 1 ? 's' : ''} configured` : 'Enter Groq keys to start'}
+                  {numConfiguredKeys > 0 ? `${numConfiguredKeys} key${numConfiguredKeys > 1 ? 's' : ''} configured` : 'Enter Gemini API key to start'}
                 </p>
               </div>
             </div>
@@ -1197,7 +1210,7 @@ export default function GenerateMetadataPage() {
           {showConfig && (
             <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #F1F1F7', display: 'flex', flexDirection: 'column', gap: 14 }} className="animate-fade-in">
               <p style={{ fontSize: 12, color: '#6B6B8A', margin: 0, lineHeight: 1.5 }}>
-                Provide up to three Groq API Keys. Keys are stored securely in browser cookies and sent directly to Groq. If key 1 hits a rate limit (HTTP 429), rotation fallbacks will proceed to key 2, then key 3.
+                Provide up to three Google Gemini API Keys. Keys are stored securely in browser cookies and sent directly to Google. If key 1 hits a rate limit (HTTP 429), rotation fallbacks will proceed to key 2, then key 3.
               </p>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1208,7 +1221,7 @@ export default function GenerateMetadataPage() {
                         type={showKeys[idx] ? 'text' : 'password'}
                         value={key}
                         onChange={(e) => handleKeyChange(idx, e.target.value)}
-                        placeholder={`Groq API Key ${idx + 1}`}
+                        placeholder={`Gemini API Key ${idx + 1}`}
                         style={{
                           width: '100%', padding: '9px 40px 9px 12px',
                           background: '#F7F7FB', border: '1px solid #E4E4EF',
@@ -1301,7 +1314,7 @@ export default function GenerateMetadataPage() {
                 )}
 
                 <a
-                  href="https://console.groq.com/keys"
+                  href="https://aistudio.google.com/apikey"
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{
@@ -1832,7 +1845,7 @@ export default function GenerateMetadataPage() {
                       value={selectedModel}
                       onChange={(e) => {
                         setSelectedModel(e.target.value);
-                        setCookie('grok_model', e.target.value, 365);
+                        setCookie('gemini_model', e.target.value, 365);
                         addLog(`Preferred model changed to: ${e.target.value}`, "info");
                       }}
                       style={{
@@ -1848,10 +1861,9 @@ export default function GenerateMetadataPage() {
                         outline: 'none'
                       }}
                     >
-                      <option value="meta-llama/llama-4-maverick-17b-128e-instruct">Llama 4 Maverick 17B Vision (Default)</option>
-                      <option value="llama-3.2-11b-vision-preview">Llama 3.2 11B Vision (Fast)</option>
-                      <option value="llama-3.2-90b-vision-preview">Llama 3.2 90B Vision (Detailed)</option>
-                      <option value="qwen/qwen3.6-27b">Qwen 3.6 27B Vision</option>
+                      <option value="gemini-2.0-flash">Gemini 2.0 Flash (Default · Free)</option>
+                      <option value="gemini-1.5-flash">Gemini 1.5 Flash (Fast · Free)</option>
+                      <option value="gemini-1.5-pro">Gemini 1.5 Pro (Best Quality)</option>
                     </select>
                   </div>
 
