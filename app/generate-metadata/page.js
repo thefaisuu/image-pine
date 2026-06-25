@@ -396,10 +396,11 @@ const callOpenRouterApiWithFallback = async (imageB64, mimeType, prompt, apiKeys
   // Candidate OpenRouter free vision models in priority order
   const candidateModels = [
     model,
-    'meta-llama/llama-3.2-11b-vision-instruct:free',
-    'meta-llama/llama-3.2-90b-vision-instruct:free',
-    'google/gemini-2.0-flash-exp:free',
-    'qwen/qwen2.5-vl-7b-instruct:free'
+    'google/gemma-4-31b-it:free',
+    'openrouter/free',
+    'nvidia/nemotron-nano-12b-v2-vl:free',
+    'google/gemma-4-26b-a4b-it:free',
+    'meta-llama/llama-3.2-11b-vision-instruct'
   ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
 
   const buildPayload = (currentModel) => ({
@@ -607,14 +608,14 @@ export default function GenerateMetadataPage() {
 
   const isGeneratingRef = useRef(false);
   const currentKeyIndexRef = useRef(0);
-  const [selectedModel, setSelectedModel] = useState('meta-llama/llama-3.2-11b-vision-instruct:free');
+  const [selectedModel, setSelectedModel] = useState('google/gemma-4-31b-it:free');
 
   // Load API keys from browser cookies on mount
   useEffect(() => {
     const k1 = getCookie('openrouter_key_1') || '';
     const k2 = getCookie('openrouter_key_2') || '';
     const k3 = getCookie('openrouter_key_3') || '';
-    const savedModel = getCookie('openrouter_model') || 'meta-llama/llama-3.2-11b-vision-instruct:free';
+    const savedModel = getCookie('openrouter_model') || 'google/gemma-4-31b-it:free';
     
     const loaded = [];
     if (k1) loaded.push(k1);
@@ -710,7 +711,7 @@ export default function GenerateMetadataPage() {
           'X-Title': 'Image Pine'
         },
         body: JSON.stringify({
-          model: selectedModel || 'meta-llama/llama-3.2-11b-vision-instruct:free',
+          model: selectedModel || 'google/gemma-4-31b-it:free',
           messages: [{ role: 'user', content: 'Ping' }],
           max_tokens: 5
         })
@@ -1871,10 +1872,12 @@ export default function GenerateMetadataPage() {
                         outline: 'none'
                       }}
                     >
-                      <option value="meta-llama/llama-3.2-11b-vision-instruct:free">Llama 3.2 11B Vision (Default · Free)</option>
-                      <option value="meta-llama/llama-3.2-90b-vision-instruct:free">Llama 3.2 90B Vision (Better · Free)</option>
-                      <option value="google/gemini-2.0-flash-exp:free">Gemini 2.0 Flash (via OpenRouter · Free)</option>
-                      <option value="qwen/qwen2.5-vl-7b-instruct:free">Qwen 2.5 VL 7B Vision (Free)</option>
+                      <option value="google/gemma-4-31b-it:free">Google: Gemma 4 31B (Default · Free)</option>
+                      <option value="openrouter/free">Auto Free Model (Recommended · Free)</option>
+                      <option value="nvidia/nemotron-nano-12b-v2-vl:free">NVIDIA: Nemotron Nano 12B VL (Free)</option>
+                      <option value="google/gemma-4-26b-a4b-it:free">Google: Gemma 4 26B (Free)</option>
+                      <option value="meta-llama/llama-3.2-11b-vision-instruct">Llama 3.2 11B Vision (Paid)</option>
+                      <option value="meta-llama/llama-3.2-90b-vision-instruct">Llama 3.2 90B Vision (Paid)</option>
                     </select>
                   </div>
 
