@@ -73,7 +73,7 @@ const _FEATURES = [
       </svg>
     ),
     title: 'Groq-Powered Vision',
-    desc: 'Uses Groq\'s high-speed Llama vision models to extract highly descriptive and relevant metadata tags from assets instantly.'
+    desc: 'Uses Groq\'s high-speed multimodal vision models to extract highly descriptive and relevant metadata tags from assets instantly.'
   },
   {
     icon: (
@@ -406,7 +406,7 @@ const callGrokApiWithFallback = async (imageB64, mimeType, prompt, apiKeys, mode
           'Authorization': `Bearer ${key}`
         },
         body: JSON.stringify({
-          model: model || 'meta-llama/llama-4-scout-17b-16e-instruct',
+          model: model || 'qwen/qwen3.6-27b',
           messages: [
             {
               role: 'user',
@@ -541,7 +541,7 @@ export default function GenerateMetadataPage() {
 
   const isGeneratingRef = useRef(false);
   const currentKeyIndexRef = useRef(0);
-  const modelName = 'meta-llama/llama-4-scout-17b-16e-instruct'; // Hardcoded vision model for Groq
+  const modelName = 'qwen/qwen3.6-27b'; // Hardcoded vision model for Groq
 
   // Load API keys from browser cookies on mount
   useEffect(() => {
@@ -639,7 +639,7 @@ export default function GenerateMetadataPage() {
           'Authorization': `Bearer ${firstKey}`
         },
         body: JSON.stringify({
-          model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+          model: 'qwen/qwen3.6-27b',
           messages: [{ role: 'user', content: 'Ping' }],
           max_tokens: 2
         })
@@ -1042,7 +1042,7 @@ export default function GenerateMetadataPage() {
         ].join(delimiter);
       } else if (platform === 'Magnific') {
         const promptVal = isAiGenerated ? 'Analyze this image and generate SEO-optimized metadata. Return JSON with title, description, keywords, category.' : '';
-        const modelVal = isAiGenerated ? 'meta-llama/llama-4-scout-17b-16e-instruct' : '';
+        const modelVal = isAiGenerated ? 'qwen/qwen3.6-27b' : '';
         return [
           escapeCsv(f.name),
           escapeCsv(title),
