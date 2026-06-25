@@ -445,7 +445,7 @@ const callGrokApiWithFallback = async (imageB64, mimeType, prompt, apiKeys, mode
           payload.reasoning_format = "hidden";
         }
 
-        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        let response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -455,7 +455,25 @@ const callGrokApiWithFallback = async (imageB64, mimeType, prompt, apiKeys, mode
         });
 
         if (response.status === 429) {
-          onKeySwitch?.(`API Key ${index + 1} rate limited (429) on ${currentModel}.`);
+          let retryCount = 0;
+          while (retryCount < 3 && response.status === 429) {
+            retryCount++;
+            const delay = retryCount * 3000;
+            onKeySwitch?.(`Rate limit (429) on ${currentModel}. Retrying in ${delay / 1000}s (Attempt ${retryCount}/3)...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${key}`
+              },
+              body: JSON.stringify(payload)
+            });
+          }
+        }
+
+        if (response.status === 429) {
+          onKeySwitch?.(`API Key ${index + 1} remains rate limited (429) on ${currentModel} after retries.`);
           break; // Break the models loop to rotate to the next key
         }
 
