@@ -417,7 +417,7 @@ const callGeminiApiWithFallback = async (imageB64, mimeType, prompt, apiKeys, mo
       }
     ],
     temperature: 0.2,
-    max_completion_tokens: 1500
+    max_tokens: 1500
   });
 
   const tryFetch = async (key, payload) => fetch(`https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`, {
@@ -704,7 +704,7 @@ export default function GenerateMetadataPage() {
         body: JSON.stringify({
           model: selectedModel || 'gemini-2.0-flash',
           messages: [{ role: 'user', content: 'Ping' }],
-          max_completion_tokens: 2
+          max_tokens: 5
         })
       });
 
@@ -714,8 +714,10 @@ export default function GenerateMetadataPage() {
         addLog("API check passed.", "success");
       } else {
         const text = await response.text();
+        let detail = '';
+        try { detail = JSON.parse(text)?.error?.message || text; } catch { detail = text; }
         setTestStatus('failed');
-        setTestMessage(`Test failed (Status ${response.status})`);
+        setTestMessage(`Test failed (Status ${response.status}): ${detail.slice(0, 120)}`);
         addLog(`API check failed: ${text}`, "error");
       }
     } catch (err) {
