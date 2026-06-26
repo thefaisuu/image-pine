@@ -137,7 +137,7 @@ export default function PrivacyPage() {
               You may voluntarily subscribe to <span className="notranslate">ImagePine</span> product updates and announcements by providing your email address through our subscription popup. This is entirely optional — no account or subscription is required to use any of our tools.
             </p>
             <p style={{ ...pStyle, marginTop: 10 }}>
-              Email addresses collected through the subscription form are stored securely using <strong>Brevo</strong> (formerly Sendinblue), a trusted third-party email marketing platform. Your email address will only ever be used to send you <span className="notranslate">ImagePine</span> product updates, new feature announcements, and related communications. We will never sell, rent, or share your email address with any third party for marketing purposes.
+              Email addresses collected through the subscription form are stored securely using <strong>Brevo</strong> (formerly Sendinblue), a trusted third-party email marketing platform. Your email address will only ever be used to send you <span className="notranslate">ImagePine</span> product updates, new feature announcements, and related communications.
             </p>
             <p style={{ ...pStyle, marginTop: 10 }}>
               You may unsubscribe at any time by clicking the unsubscribe link included in every email we send. Upon unsubscribing, your email address will be removed from our mailing list promptly.
