@@ -1,6 +1,27 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+
+const TURNSTILE_SITE_KEY = '0x4AAAAAADrNW5KrdQ4s-r47';
+
+function loadTurnstileScript(cb) {
+  if (typeof window === 'undefined') return;
+  if (window.turnstile) { cb(); return; }
+  if (document.getElementById('cf-ts-script')) {
+    // already injecting — wait for it
+    const wait = setInterval(() => {
+      if (window.turnstile) { clearInterval(wait); cb(); }
+    }, 100);
+    return;
+  }
+  const s = document.createElement('script');
+  s.id = 'cf-ts-script';
+  s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+  s.async = true;
+  s.defer = true;
+  s.onload = cb;
+  document.head.appendChild(s);
+}
 
 export default function ContactPage() {
   const [formSubmitted, setFormSubmitted] = useState(false);
@@ -10,6 +31,19 @@ export default function ContactPage() {
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const widgetIdRef = useRef(null);
+
+  // Preload + render Turnstile widget on mount
+  useEffect(() => {
+    loadTurnstileScript(() => {
+      if (widgetIdRef.current !== null) return;
+      widgetIdRef.current = window.turnstile.render('#contact-ts-container', {
+        sitekey: TURNSTILE_SITE_KEY,
+        size: 'invisible',
+        callback: () => {},
+      });
+    });
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -18,31 +52,45 @@ export default function ContactPage() {
     setErrorMsg('');
 
     try {
-      const response = await fetch('https://api.web3forms.com/submit', {
+      // Get Turnstile token invisibly
+      let token = '';
+      if (window.turnstile && widgetIdRef.current !== null) {
+        token = await new Promise((resolve, reject) => {
+          window.turnstile.execute(widgetIdRef.current, {
+            callback: resolve,
+            'error-callback': () => reject(new Error('turnstile-error')),
+          });
+        });
+      }
+
+      const response = await fetch('/api/contact', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-          access_key: 'd152ecf8-147d-4b5e-88fa-26856110c736',
-          name: name,
-          email: email,
-          subject: subject || 'Contact from ImagePine',
-          message: message,
-          from_name: 'ImagePine Contact Support'
-        })
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ name, email, subject, message, token }),
       });
 
       const result = await response.json();
-      if (response.status === 200 || result.success) {
+      if (response.ok && result.success) {
         setFormSubmitted(true);
+        // Reset Turnstile for potential re-use
+        if (window.turnstile && widgetIdRef.current !== null) {
+          window.turnstile.reset(widgetIdRef.current);
+        }
       } else {
-        setErrorMsg(result.message || 'Something went wrong. Please try again.');
+        setErrorMsg(result.error || 'Something went wrong. Please try again.');
+        if (window.turnstile && widgetIdRef.current !== null) {
+          window.turnstile.reset(widgetIdRef.current);
+        }
       }
-    } catch (error) {
-      console.error('Web3Forms submit error:', error);
-      setErrorMsg('Failed to send message. Please check your internet connection and try again.');
+    } catch (err) {
+      setErrorMsg(
+        err.message === 'turnstile-error'
+          ? 'Bot verification failed. Please try again.'
+          : 'Failed to send message. Please check your connection and try again.'
+      );
+      if (window.turnstile && widgetIdRef.current !== null) {
+        window.turnstile.reset(widgetIdRef.current);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -225,6 +273,9 @@ export default function ContactPage() {
                     onBlur={e => { e.target.style.borderColor = '#E4E4EF'; e.target.style.background = '#F7F7FB'; }}
                   />
                 </div>
+
+                {/* Invisible Turnstile widget container */}
+                <div id="contact-ts-container" style={{ display: 'none' }} />
 
                 {errorMsg && (
                   <p style={{ color: '#EF4444', fontSize: 13, fontWeight: 700, margin: '2px 0 6px' }}>
