@@ -4,6 +4,7 @@ import Script from "next/script";
 import Navbar from "@/components/Navbar";
 import PrivacyBanner from "@/components/PrivacyBanner";
 import Footer from "@/components/Footer";
+import EmailPopup from "@/components/EmailPopup";
 import { LanguageProvider } from "@/lib/LanguageContext";
 import "./globals.css";
 
@@ -59,6 +60,7 @@ export default function RootLayout({
         <LanguageProvider>
           <Navbar />
           <PrivacyBanner />
+          <EmailPopup />
           <main style={{ flex: 1 }}>{children}</main>
           <Footer />
         </LanguageProvider>
