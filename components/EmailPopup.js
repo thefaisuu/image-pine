@@ -189,10 +189,9 @@ export default function EmailPopup() {
             display:"flex",alignItems:"center",justifyContent:"center",
             boxShadow:"0 8px 24px -4px rgba(115,66,230,0.4)",
           }}>
-            <svg width="24" height="24" fill="none" stroke="#fff" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="2" y="7" width="20" height="14" rx="2"/>
-              <path d="M16 3H8a2 2 0 00-2 2v2h12V5a2 2 0 00-2-2z"/>
-              <path d="M2 9l10 7 10-7"/>
+            <svg width="26" height="26" fill="none" stroke="#fff" viewBox="0 0 24 24" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="4" width="20" height="16" rx="2"/>
+              <polyline points="2,4 12,13 22,4"/>
             </svg>
           </div>
 
