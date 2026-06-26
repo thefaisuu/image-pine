@@ -134,7 +134,7 @@ export default function PrivacyPage() {
           <div>
             <h2 style={h2Style}>5. Email Subscriptions</h2>
             <p style={{ ...pStyle, marginTop: 12 }}>
-              You may voluntarily subscribe to <span className="notranslate">ImagePine</span> product updates and announcements by providing your email address through our subscription popup. This is entirely optional — no account or subscription is required to use any of our tools.
+              You may voluntarily subscribe to <span className="notranslate">ImagePine</span> product updates and announcements by providing your email address through our subscription popup. This is entirely optional. No account or subscription is required to use any of our tools.
             </p>
             <p style={{ ...pStyle, marginTop: 10 }}>
               Email addresses collected through the subscription form are stored securely using <strong>Brevo</strong> (formerly Sendinblue), a trusted third-party email marketing platform. Your email address will only ever be used to send you <span className="notranslate">ImagePine</span> product updates, new feature announcements, and related communications.
@@ -147,7 +147,7 @@ export default function PrivacyPage() {
           <div>
             <h2 style={h2Style}>6. Bot Protection and Cookies</h2>
             <p style={{ ...pStyle, marginTop: 12 }}>
-              We use <strong>Cloudflare Turnstile</strong> on our subscription and contact forms to protect against spam, abuse, and automated bot submissions. Turnstile operates invisibly in the background — no CAPTCHA puzzle or checkbox is shown to legitimate users.
+              We use <strong>Cloudflare Turnstile</strong> on our subscription and contact forms to protect against spam, abuse, and automated bot submissions. Turnstile operates invisibly in the background. No CAPTCHA puzzle or checkbox is shown to legitimate users.
             </p>
             <p style={{ ...pStyle, marginTop: 10 }}>
               As part of this protection, Cloudflare Turnstile may set cookies or use similar browser-local storage mechanisms to distinguish legitimate human users from automated traffic. These cookies are technical in nature and contain no personal information. Use of Cloudflare Turnstile is subject to the <a href="https://www.cloudflare.com/cloudflare-customer-privacy-addendum/" target="_blank" rel="noopener noreferrer" style={{ color: '#5B5BD6', fontWeight: 600, textDecoration: 'none' }}>Cloudflare Turnstile Privacy Addendum</a> and <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener noreferrer" style={{ color: '#5B5BD6', fontWeight: 600, textDecoration: 'none' }}>Cloudflare&apos;s Privacy Policy</a>.
