@@ -142,7 +142,6 @@ export default function EmailPopup() {
     <>
       {/* Backdrop */}
       <div
-        onClick={handleDismiss}
         style={{
           position:"fixed",inset:0,zIndex:9998,
           background:"rgba(10,10,30,0.45)",
