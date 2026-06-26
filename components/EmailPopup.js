@@ -1,11 +1,11 @@
 ﻿"use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import Script from "next/script";
+import React, { useState, useEffect, useRef } from "react";
 
 const COOKIE_SUBSCRIBED = "ip_subscribed";
 const COOKIE_DISMISSED  = "ip_popup_dismissed";
 const DISMISS_DAYS = 7;
+const DELAY_MS = 15000;
 
 function getCookie(name) {
   if (typeof document === "undefined") return null;
@@ -18,33 +18,56 @@ function setCookie(name, value, days) {
   document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Strict`;
 }
 
+function loadTurnstileScript(onReady) {
+  if (typeof window === "undefined") return;
+  if (window.turnstile) { onReady(); return; }
+  if (document.getElementById("cf-turnstile-script")) {
+    // Script already injected, wait for it
+    const poll = setInterval(() => {
+      if (window.turnstile) { clearInterval(poll); onReady(); }
+    }, 100);
+    return;
+  }
+  const s = document.createElement("script");
+  s.id = "cf-turnstile-script";
+  s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+  s.async = true;
+  s.defer = true;
+  s.onload = onReady;
+  document.head.appendChild(s);
+}
+
 export default function EmailPopup() {
   const [visible, setVisible]   = useState(false);
   const [email, setEmail]       = useState("");
   const [status, setStatus]     = useState("idle");
   const [message, setMessage]   = useState("");
   const widgetIdRef             = useRef(null);
-  const turnstileReadyRef       = useRef(false);
 
+  // Load Turnstile script immediately (before popup shows) so it is ready
+  useEffect(() => {
+    loadTurnstileScript(() => {}); // preload silently
+  }, []);
+
+  // Show popup after delay if no blocking cookie
   useEffect(() => {
     if (getCookie(COOKIE_SUBSCRIBED) || getCookie(COOKIE_DISMISSED)) return;
-    const t = setTimeout(() => setVisible(true), 15000);
+    const t = setTimeout(() => setVisible(true), DELAY_MS);
     return () => clearTimeout(t);
   }, []);
 
-  const renderTurnstile = useCallback(() => {
-    if (!visible || !turnstileReadyRef.current || widgetIdRef.current !== null) return;
-    if (typeof window === "undefined" || !window.turnstile) return;
-    widgetIdRef.current = window.turnstile.render("#ts-container", {
-      sitekey: "0x4AAAAAADrNW5KrdQ4s-r47",
-      size: "invisible",
-      callback: () => {},
+  // Render Turnstile widget once popup is visible
+  useEffect(() => {
+    if (!visible) return;
+    loadTurnstileScript(() => {
+      if (widgetIdRef.current !== null) return;
+      widgetIdRef.current = window.turnstile.render("#ts-container", {
+        sitekey: "0x4AAAAAADrNW5KrdQ4s-r47",
+        size: "invisible",
+        callback: () => {},
+      });
     });
   }, [visible]);
-
-  useEffect(() => {
-    if (visible) renderTurnstile();
-  }, [visible, renderTurnstile]);
 
   const handleDismiss = () => {
     setCookie(COOKIE_DISMISSED, "1", DISMISS_DAYS);
@@ -59,7 +82,7 @@ export default function EmailPopup() {
     setMessage("");
     try {
       let token = "";
-      if (typeof window !== "undefined" && window.turnstile && widgetIdRef.current !== null) {
+      if (window.turnstile && widgetIdRef.current !== null) {
         token = await new Promise((resolve, reject) => {
           window.turnstile.execute(widgetIdRef.current, {
             callback: resolve,
@@ -90,7 +113,7 @@ export default function EmailPopup() {
       setMessage(err.message === "turnstile-error"
         ? "Verification failed. Please try again."
         : "Something went wrong. Please try again.");
-      if (widgetIdRef.current !== null && typeof window !== "undefined" && window.turnstile) {
+      if (widgetIdRef.current !== null && window.turnstile) {
         window.turnstile.reset(widgetIdRef.current);
       }
     }
@@ -100,11 +123,7 @@ export default function EmailPopup() {
 
   return (
     <>
-      <Script
-        src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
-        strategy="lazyOnload"
-        onLoad={() => { turnstileReadyRef.current = true; renderTurnstile(); }}
-      />
+      {/* Backdrop */}
       <div
         onClick={handleDismiss}
         style={{
@@ -116,6 +135,8 @@ export default function EmailPopup() {
         }}
         aria-hidden="true"
       />
+
+      {/* Modal */}
       <div
         role="dialog"
         aria-modal="true"
@@ -134,12 +155,16 @@ export default function EmailPopup() {
           animation:"ts-slide-up 0.35s cubic-bezier(0.16,1,0.3,1) forwards",
           overflow:"hidden",
         }}>
+
+          {/* Decorative blob */}
           <div style={{
             position:"absolute",top:-60,right:-60,
             width:200,height:200,borderRadius:"50%",
             background:"radial-gradient(circle, rgba(115,66,230,0.12) 0%, transparent 70%)",
             pointerEvents:"none",
           }}/>
+
+          {/* Close button */}
           <button
             onClick={handleDismiss}
             aria-label="Close popup"
@@ -156,6 +181,8 @@ export default function EmailPopup() {
               <path d="M18 6L6 18M6 6l12 12"/>
             </svg>
           </button>
+
+          {/* Icon */}
           <div style={{
             width:52,height:52,borderRadius:14,marginBottom:20,
             background:"linear-gradient(135deg,#7342E6 0%,#5B5BD6 100%)",
@@ -168,6 +195,8 @@ export default function EmailPopup() {
               <path d="M2 9l10 7 10-7"/>
             </svg>
           </div>
+
+          {/* Heading */}
           <h2 style={{
             margin:"0 0 8px",fontSize:22,fontWeight:800,color:"#111128",
             lineHeight:1.25,letterSpacing:"-0.02em",
@@ -177,6 +206,7 @@ export default function EmailPopup() {
           <p style={{margin:"0 0 24px",fontSize:14,color:"#6B6B8A",lineHeight:1.55}}>
             Be the first to try our new free tools and features.
           </p>
+
           {status === "success" ? (
             <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:10,padding:"24px 0"}}>
               <div style={{width:52,height:52,borderRadius:"50%",background:"#ECFDF5",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -208,6 +238,7 @@ export default function EmailPopup() {
                   onFocus={e=>{e.target.style.borderColor="#7342E6";e.target.style.background="#fff";}}
                   onBlur={e=>{e.target.style.borderColor=status==="error"?"#FCA5A5":"#E4E4EF";e.target.style.background="#F7F7FB";}}
                 />
+
                 {message && status==="error" && (
                   <p style={{margin:0,fontSize:12,color:"#B91C1C",fontWeight:600,display:"flex",alignItems:"center",gap:5}}>
                     <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
@@ -216,6 +247,7 @@ export default function EmailPopup() {
                     {message}
                   </p>
                 )}
+
                 <button
                   type="submit"
                   disabled={status==="loading"}
@@ -242,7 +274,10 @@ export default function EmailPopup() {
                   ):"Keep Me Posted"}
                 </button>
               </div>
+
+              {/* Invisible Turnstile widget */}
               <div id="ts-container"/>
+
               <p style={{margin:"14px 0 0",textAlign:"center",fontSize:11,color:"#9898B5",fontWeight:500}}>
                 No spam. Unsubscribe anytime.
               </p>
@@ -250,6 +285,7 @@ export default function EmailPopup() {
           )}
         </div>
       </div>
+
       <style>{`
         @keyframes ts-fade-in  { from { opacity:0 } to { opacity:1 } }
         @keyframes ts-slide-up { from { opacity:0; transform:translateY(28px) scale(0.97) } to { opacity:1; transform:translateY(0) scale(1) } }
