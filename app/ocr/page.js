@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import UploadBox from '@/components/UploadBox';
 import { saveAs } from 'file-saver';
 import { saveHistory } from '@/lib/storage';
@@ -57,9 +57,38 @@ const LANGUAGES = [
   { val: 'chi_sim', label: 'Chinese (简体中文)' }
 ];
 
+const testIndexedDB = () => {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), 1000);
+    try {
+      if (typeof window === 'undefined' || !window.indexedDB) {
+        clearTimeout(timer);
+        resolve(false);
+        return;
+      }
+      const request = window.indexedDB.open("test-idb-avail", 1);
+      request.onsuccess = () => {
+        clearTimeout(timer);
+        try {
+          window.indexedDB.deleteDatabase("test-idb-avail");
+        } catch {}
+        resolve(true);
+      };
+      request.onerror = () => {
+        clearTimeout(timer);
+        resolve(false);
+      };
+    } catch {
+      clearTimeout(timer);
+      resolve(false);
+    }
+  });
+};
+
 export default function OcrPage() {
   const [file, setFile] = useState(null);
   const [lang, setLang] = useState('eng');
+  const workerRef = useRef(null);
   const [extractedText, setExtractedText] = useState('');
   const [progressStatus, setProgressStatus] = useState('');
   const [progressPercent, setProgressPercent] = useState(0);
@@ -80,9 +109,18 @@ export default function OcrPage() {
     }
   };
 
-  const runOcr = () => {
+  const runOcr = useCallback(async (active = true) => {
     if (!file) return;
 
+    // Terminate any running worker first
+    if (workerRef.current) {
+      try {
+        await workerRef.current.terminate();
+      } catch {}
+      workerRef.current = null;
+    }
+
+    if (!active) return;
     setIsProcessing(true);
     setErrorMsg('');
     setProgressStatus('Initializing Tesseract...');
@@ -90,11 +128,12 @@ export default function OcrPage() {
 
     const imgSrc = file.preview || URL.createObjectURL(file);
 
-    Tesseract.recognize(
-      imgSrc,
-      lang,
-      {
+    // Helper to run OCR with specific options
+    const attemptOcr = async (useCache) => {
+      const worker = await Tesseract.createWorker(lang, 1, {
+        cacheMethod: useCache ? 'write' : 'none',
         logger: (m) => {
+          if (!active) return;
           if (m.status === 'recognizing text') {
             setProgressStatus('Recognizing text...');
             setProgressPercent(Math.round(m.progress * 100));
@@ -103,28 +142,101 @@ export default function OcrPage() {
             setProgressPercent(0);
           }
         }
-      }
-    )
-      .then(({ data: { text } }) => {
-        setExtractedText(text || 'No text recognized in the image.');
-        setProgressStatus('Completed successfully!');
-        setProgressPercent(100);
-        setIsProcessing(false);
-        saveHistory('Image OCR Extractor', `${file.name.slice(0, 16)}_extracted.txt`);
-      })
-      .catch((err) => {
-        console.error(err);
-        setErrorMsg('Error extracting text. Make sure the image is readable.');
-        setIsProcessing(false);
       });
-  };
+
+      workerRef.current = worker;
+
+      const { data: { text } } = await worker.recognize(imgSrc);
+      return text;
+    };
+
+    // Test IndexedDB support first
+    const isIdbSupported = await testIndexedDB();
+    
+    // Set a timeout of 18 seconds for the cache-enabled attempt
+    const TIMEOUT_MS = 18000; 
+
+    try {
+      let text;
+      if (isIdbSupported) {
+        text = await Promise.race([
+          attemptOcr(true),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('TIMEOUT')), TIMEOUT_MS)
+          )
+        ]);
+      } else {
+        console.warn('IndexedDB not supported or blocked. Bypassing cache.');
+        text = await attemptOcr(false);
+      }
+
+      if (!active) return;
+      setExtractedText(text || 'No text recognized in the image.');
+      setProgressStatus('Completed successfully!');
+      setProgressPercent(100);
+      setIsProcessing(false);
+      saveHistory('Image OCR Extractor', `${file.name.slice(0, 16)}_extracted.txt`);
+
+    } catch (err) {
+      console.error(err);
+      
+      if (workerRef.current) {
+        try {
+          await workerRef.current.terminate();
+        } catch {}
+        workerRef.current = null;
+      }
+
+      if (!active) return;
+
+      if (err.message === 'TIMEOUT') {
+        setProgressStatus('Cache initialization timed out. Retrying without cache...');
+        try {
+          const text = await attemptOcr(false);
+          if (!active) return;
+          setExtractedText(text || 'No text recognized in the image.');
+          setProgressStatus('Completed successfully!');
+          setProgressPercent(100);
+          setIsProcessing(false);
+          saveHistory('Image OCR Extractor', `${file.name.slice(0, 16)}_extracted.txt`);
+          return;
+        } catch (retryErr) {
+          console.error(retryErr);
+          if (workerRef.current) {
+            try { await workerRef.current.terminate(); } catch {}
+            workerRef.current = null;
+          }
+        }
+      }
+
+      if (!active) return;
+      setErrorMsg('Error extracting text. Make sure the image is readable and connection is stable.');
+      setIsProcessing(false);
+    } finally {
+      if (workerRef.current) {
+        try {
+          await workerRef.current.terminate();
+        } catch {}
+        if (active) {
+          workerRef.current = null;
+        }
+      }
+    }
+  }, [file, lang]);
 
   // Run OCR automatically when a file is selected
   useEffect(() => {
+    let active = true;
     if (file) {
-      runOcr();
+      runOcr(active);
     }
-  }, [file, lang]);
+    return () => {
+      active = false;
+      if (workerRef.current) {
+        workerRef.current.terminate().catch(() => {});
+      }
+    };
+  }, [file, lang, runOcr]);
 
   const copyToClipboard = () => {
     if (!extractedText) return;
@@ -141,13 +253,7 @@ export default function OcrPage() {
     saveAs(blob, `${baseName}_extracted.txt`);
   };
 
-  const formatSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-  };
+
 
   return (
     <ToolPageShell
@@ -272,7 +378,7 @@ export default function OcrPage() {
               {!isProcessing && !extractedText && !errorMsg && (
                 <div className="pt-2">
                   <button
-                    onClick={runOcr}
+                    onClick={() => runOcr(true)}
                     className="py-3 px-6 text-xs font-bold rounded-lg bg-primary text-white hover:bg-primary-dark transition-all duration-150"
                   >
                     Run OCR Text Extraction
