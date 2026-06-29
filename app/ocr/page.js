@@ -62,8 +62,8 @@ const STATUS_MAP = {
   'initialized tesseract api': 'Getting ready...',
   'loading tesseract core': 'Getting ready...',
   'initialized tesseract core': 'Getting ready...',
-  'loading language traineddata': 'Loading files... (Please hold)',
-  'loaded language traineddata': 'Files loaded!',
+  'loading language traineddata': 'Loading file... (Please hold)',
+  'loaded language traineddata': 'File loaded!',
   'initializing api': 'Starting scanner...',
   'initialized api': 'Scanner ready!',
   'recognizing text': 'Reading text...'
@@ -155,7 +155,7 @@ export default function OcrPage() {
             } else if (lowerStatus.includes('recognizing') || lowerStatus.includes('recognize')) {
               displayStatus = 'Reading text...';
             } else if (lowerStatus.includes('language') || lowerStatus.includes('traineddata') || lowerStatus.includes('tessdata')) {
-              displayStatus = lowerStatus.includes('loaded') ? 'Files loaded!' : 'Loading files... (Please hold)';
+              displayStatus = lowerStatus.includes('loaded') ? 'File loaded!' : 'Loading file... (Please hold)';
             } else if (lowerStatus.includes('tesseract') || lowerStatus.includes('core') || lowerStatus.includes('api')) {
               displayStatus = 'Getting ready...';
             } else {
