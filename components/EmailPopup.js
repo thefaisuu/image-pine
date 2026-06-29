@@ -7,8 +7,8 @@ const COOKIE_DISMISSED     = "ip_popup_dismissed";
 const COOKIE_DISMISS_COUNT = "ip_popup_dismiss_count";
 const DELAY_MS = 15000;
 
-// Dismiss schedule: 1st close = 7 days, 2nd close = 30 days, 3rd+ = never
-const DISMISS_SCHEDULE = [7, 30];
+// Dismiss schedule: 1st close = 1 day, 2nd close = 7 days, 3rd close = 15 days, 4th close = 30 days, 5th+ = never
+const DISMISS_SCHEDULE = [1, 7, 15, 30];
 
 function getCookie(name) {
   if (typeof document === "undefined") return null;
@@ -78,10 +78,10 @@ export default function EmailPopup() {
     const newCount = currentCount + 1;
 
     if (newCount > DISMISS_SCHEDULE.length) {
-      // 3rd+ close: set dismissed forever (10 years)
+      // 5th+ close: set dismissed forever (10 years)
       setCookie(COOKIE_DISMISSED, "1", 3650);
     } else {
-      // 1st close = 7 days, 2nd close = 30 days
+      // Apply the progressive delay (1, 7, 15, or 30 days)
       const days = DISMISS_SCHEDULE[newCount - 1];
       setCookie(COOKIE_DISMISSED, "1", days);
     }
